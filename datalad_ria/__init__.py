@@ -15,13 +15,13 @@ command_suite = (
         # specification of a command, any number of commands can be defined
         (
             # importable module that contains the command implementation
-            'datalad_ria.hello_cmd',
+            'datalad_ria.create_sibling_ria',
             # name of the command class implementation in above module
-            'HelloWorld',
+            'CreateSiblingRia',
             # optional name of the command in the cmdline API
-            'hello-cmd',
+            'create-sibling-ria2',
             # optional name of the command in the Python API
-            'hello_cmd'
+            'create_sibling_ria2'
         ),
     ]
 )
