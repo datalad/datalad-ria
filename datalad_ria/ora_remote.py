@@ -23,14 +23,36 @@ class OraRemote(SpecialRemote):
 
     It is a reimplementation of an earlier ORA remote (until 0.19.x a part of
     the DataLad core library).
+
+
+    Configuration
+    -------------
+
+    The behavior of this special remote can be tuned via a number of
+    configuration settings.
+
+    `datalad.ora.legacy-mode=yes|[no]`
+      If enabled, all special remote operations fall back onto the
+      legacy ``ORA`` special remote implementation. This mode is
+      only provided for backward-compatibility.
     """
     def __init__(self, annex):
         super().__init__(annex)
+        self._legacy_special_remote = None
 
     def initremote(self):
         pass
 
     def prepare(self):
+        # determine if we are in legacy mode, and if so, fall back to legacy ORA
+        if self.get_remote_gitcfg(
+                'ora', 'legacy-mode', default='no').lower() == 'yes':
+            # ATTENTION DEBUGGERS!
+            # If we get here, we will bypass all the ora implementation!
+            # Check __getattribute__() -- pretty much no other code in this
+            # file will run! __getattribute__ will relay all top-level
+            # operations to an instance of the legacy implementation
+            from datalad_ria.legacy import LegacyORARemote
         pass
 
     def transfer_store(self, key, filename):
