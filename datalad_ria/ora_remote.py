@@ -51,6 +51,9 @@ class OraRemote(SpecialRemote):
         self.remote_object_tree_version = None
 
     def initremote(self):
+        if not self.archive_id:
+            # The config manager can handle bare repos since datalad#6332
+            self.archive_id = self._repo.config.get('datalad.dataset.id')
         pass
 
     def prepare(self):
