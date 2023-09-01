@@ -1,8 +1,13 @@
+import logging
 from datalad_next.annexremotes import (
     RemoteError,
     SpecialRemote,
     super_main
 )
+
+lgr = logging.getLogger('datalad.customremotes.ora_remote')
+
+
 
 
 class OraRemote(SpecialRemote):
