@@ -8,6 +8,12 @@ from datalad_next.annexremotes import (
 lgr = logging.getLogger('datalad.customremotes.ora_remote')
 
 
+class RemoteCommandFailedError(Exception):
+    pass
+
+
+class RIARemoteError(RemoteError):
+    pass
 
 
 class OraRemote(SpecialRemote):
