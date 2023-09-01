@@ -38,7 +38,17 @@ class OraRemote(SpecialRemote):
     """
     def __init__(self, annex):
         super().__init__(annex)
+        # the following members will be initialized on prepare()
+        # as they require access to the underlying repository
+        self._repo = None
+        # name of the special remote
+        self._remotename = None
+        # name of the corrsponding Git remote
+        self._gitremotename = None
+        self.archive_id = None
         self._legacy_special_remote = None
+        self.remote_dataset_tree_version = None
+        self.remote_object_tree_version = None
 
     def initremote(self):
         pass
