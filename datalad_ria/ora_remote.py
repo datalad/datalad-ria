@@ -43,7 +43,7 @@ class OraRemote(SpecialRemote):
         self._repo = None
         # name of the special remote
         self._remotename = None
-        # name of the corrsponding Git remote
+        # name of the corresponding Git remote
         self._gitremotename = None
         self.archive_id = None
         self._legacy_special_remote = None
