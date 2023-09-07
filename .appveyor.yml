@@ -193,9 +193,13 @@ build_script:
 before_test:
   # simple call to see if datalad and git-annex are installed properly
   - datalad wtf
+  # establish expected permission setup for SSH key
+  - sh: chmod 600 tools/ci/ria-sshd/id_rsa
 
 
 test_script:
+  # check working SSH login to docker container
+  #- sh: SSH_ASKPASS=tools/ci/askpass ssh -i tools/ci/ria-sshd/id_rsa -p 2222 -n riauser@localhost uname -a
   # run tests on installed module, not source tree files
   - cmd: md __testhome__
   - sh: mkdir __testhome__
