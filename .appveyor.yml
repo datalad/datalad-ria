@@ -145,6 +145,8 @@ init:
 
 
 install:
+  # show what we have in the cache
+  - sh: ls -lah /home/appveyor/cache || echo "No cache items"
   # place a debug setup helper at a convenient location
   - cmd: copy tools\ci\appveyor_env_setup.bat C:\\datalad_debug.bat
   # If a particular Python version is requested, use env setup (using the
@@ -217,8 +219,9 @@ after_test:
   - sh: ./codecov
 
 
-#on_success:
-#
+on_success:
+  # show what we have in the cache
+  - sh: ls -lah /home/appveyor/cache || echo "No cache items"
 
 
 #on_failure:
