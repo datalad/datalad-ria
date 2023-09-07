@@ -3,7 +3,7 @@
 set -e -u
 
 service=$1
-imgfile="/home/appveyor/cache/${service}.dockerimg"
+imgfile="cache/${service}.dockerimg"
 
 if [ -f "$imgfile" ]; then
   # we have the image cached

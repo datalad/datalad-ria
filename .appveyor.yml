@@ -115,7 +115,14 @@ cache:
   # TODO: Can we cache `brew`?
   #- /usr/local/Cellar
   #- /usr/local/bin
-  - /home/appveyor/cache/ria-sshd.dockerimg -> tools/ci/ria-sshd/Dockerfile, tools/ci/ria-sshd/id_rsa.pub
+  - cache/ria-sshd.dockerimg -> tools/ci/ria-sshd/Dockerfile, tools/ci/ria-sshd/id_rsa.pub
+
+
+artifacts:
+  # publish the docker images for reuse in other CI runs (on other platforms)
+  - path: cache/ria-sshd.dockerimg
+    name: RIA-SSHD Docker image
+    type: File
 
 
 # turn of support for MS project build support (not needed)
@@ -156,7 +163,7 @@ init:
 
 install:
   # show what we have in the cache
-  - sh: ls -lah /home/appveyor/cache || echo "No cache items"
+  - sh: ls -lah cache || echo "No cache items"
   # place a debug setup helper at a convenient location
   - cmd: copy tools\ci\appveyor_env_setup.bat C:\\datalad_debug.bat
   # If a particular Python version is requested, use env setup (using the
@@ -237,7 +244,7 @@ after_test:
 
 on_success:
   # show what we have in the cache
-  - sh: ls -lah /home/appveyor/cache || echo "No cache items"
+  - sh: ls -lah cache || echo "No cache items"
 
 
 #on_failure:
