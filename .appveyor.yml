@@ -68,22 +68,24 @@ environment:
       # system git-annex is way too old, use better one
       INSTALL_GITANNEX: git-annex -m snapshot
       CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
-    # Windows core tests
-    - ID: WinP39core
-      # ~35 min
-      DTS: datalad_ria
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-      # Python version specification is non-standard on windows
-      PY: 39-x64
-      INSTALL_GITANNEX: git-annex -m datalad/packages
-    # MacOS core tests
-    - ID: MacP38core
-      DTS: datalad_ria
-      APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
-      PY: 3.8
-      INSTALL_GITANNEX: git-annex
-      DATALAD_LOCATIONS_SOCKETS: /Users/appveyor/DLTMP/sockets
-      CODECOV_BINARY: https://uploader.codecov.io/latest/macos/codecov
+      # we only want the docker image builds to run on a single platform
+      DOCKER_ENABLE_BUILD: 1
+    ## Windows core tests
+    #- ID: WinP39core
+    #  # ~35 min
+    #  DTS: datalad_ria
+    #  APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+    #  # Python version specification is non-standard on windows
+    #  PY: 39-x64
+    #  INSTALL_GITANNEX: git-annex -m datalad/packages
+    ## MacOS core tests
+    #- ID: MacP38core
+    #  DTS: datalad_ria
+    #  APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
+    #  PY: 3.8
+    #  INSTALL_GITANNEX: git-annex
+    #  DATALAD_LOCATIONS_SOCKETS: /Users/appveyor/DLTMP/sockets
+    #  CODECOV_BINARY: https://uploader.codecov.io/latest/macos/codecov
 
 matrix:
   allow_failures:
@@ -107,6 +109,7 @@ cache:
   # TODO: Can we cache `brew`?
   #- /usr/local/Cellar
   #- /usr/local/bin
+  - /home/appveyor/cache/ria-sshd.dockerimg -> tools/ci/ria-sshd/Dockerfile, tools/ci/ria-sshd/id_rsa.pub
 
 
 # turn of support for MS project build support (not needed)
@@ -172,6 +175,7 @@ install:
   - sh: "[ -n \"${INSTALL_GITANNEX}\" ] && datalad-installer -E ${HOME}/dlinstaller_env.sh --sudo ok ${INSTALL_GITANNEX}"
   # add location of datalad installer results to PATH
   - sh: "[ -f ${HOME}/dlinstaller_env.sh ] && . ${HOME}/dlinstaller_env.sh || true"
+  - sh: tools/ci/deploy-docker-service ria-sshd -p 2222:22 -v /home/appveyor/DLTMP:/usr/local/apache2/htdocs/
 
 
 #before_build:

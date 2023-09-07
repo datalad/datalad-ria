@@ -1,0 +1,24 @@
+#!/bin/sh
+
+set -e -u
+
+service=$1
+imgfile="/home/appveyor/cache/${service}.dockerimg"
+
+if [ -f "$imgfile" ]; then
+  # we have the image cached
+  docker load < "$imgfile"
+elif [ -n "${DOCKER_ENABLE_BUILD}" ]; then
+  # pull from dockerhub
+  docker build -t "${service}" "tools/ci/${service}"
+  # and export for caching
+  mkdir -p $(dirname "$imgfile")
+  docker save "${service}" --output="$imgfile"
+else
+  echo "No cached Docker image, and build not enabled for this run" && exit 1
+fi
+
+# launch the container, using also all additional arguments
+# ($1 will be consumed by --name)
+echo "Starting ${service}"
+docker run --rm -dit --name $@ "${service}"
