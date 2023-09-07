@@ -69,14 +69,13 @@ environment:
       CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
       # we only want the docker image builds to run on a single platform
       DOCKER_ENABLE_BUILD: 1
-    ## Windows core tests
-    #- ID: WinP39core
-    #  # ~35 min
-    #  DTS: datalad_ria
-    #  APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
-    #  # Python version specification is non-standard on windows
-    #  PY: 39-x64
-    #  INSTALL_GITANNEX: git-annex -m datalad/packages
+    # Windows core tests
+    - ID: WinP39
+      DTS: datalad_ria
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      # Python version specification is non-standard on windows
+      PY: 39-x64
+      INSTALL_GITANNEX: git-annex -m datalad/packages
     ## MacOS core tests
     #- ID: MacP38core
     #  DTS: datalad_ria
@@ -115,6 +114,7 @@ cache:
   # TODO: Can we cache `brew`?
   #- /usr/local/Cellar
   #- /usr/local/bin
+  # no docker caching on windows, we download the image as an artifact
   - cache/ria-sshd.dockerimg -> tools/ci/ria-sshd/Dockerfile, tools/ci/ria-sshd/id_rsa.pub
 
 
@@ -193,7 +193,9 @@ install:
   - sh: "[ -n \"${INSTALL_GITANNEX}\" ] && datalad-installer -E ${HOME}/dlinstaller_env.sh --sudo ok ${INSTALL_GITANNEX}"
   # add location of datalad installer results to PATH
   - sh: "[ -f ${HOME}/dlinstaller_env.sh ] && . ${HOME}/dlinstaller_env.sh || true"
+  # deploy docker containers
   - sh: tools/ci/deploy-docker-service ria-sshd -p 2222:22 -v /home/appveyor/DLTMP/riaroot:/usr/local/apache2/htdocs/
+  - cmd: tools\ci\deploy-docker-service.bat ria-sshd -p 2222:22 -v C:\DLTMP\riaroot:/usr/local/apache2/htdocs/
 
 
 #before_build:
@@ -214,14 +216,20 @@ before_test:
   - datalad wtf
   # establish expected permission setup for SSH key
   - sh: chmod 600 tools/ci/ria-sshd/id_rsa
+  - cmd: tools/ci/chmod600.bat tools/ci/ria-sshd/id_rsa
   # wipe any other known host keys
   - sh: ssh-keygen -f "/home/appveyor/.ssh/known_hosts" -R "[datalad-test-ria]:2222"
+  - cmd: ssh-keygen -f C:\Users\appveyor\.ssh\known_hosts -R "[datalad-test-ria]:2222"
   # ingest actual host key
   - sh: ssh-keyscan -t ecdsa -p 2222 -H datalad-test-ria >> ~/.ssh/known_hosts
+  - cmd: ssh-keyscan -t ecdsa -p 2222 -H datalad-test-ria >> C:\Users\appveyor\.ssh\known_hosts
   # check working SSH login and mounts of the docker containers
   - sh: touch ~/DLTMP/riaroot/probe
+  - cmd: type nul >> C:\DLTMP\riaroot\probe
   - sh: ssh -i tools/ci/ria-sshd/id_rsa -p 2222 riauser@datalad-test-ria test -f /usr/local/apache2/htdocs/probe
+  - cmd: ssh -i tools\ci\ria-sshd\id_rsa -p 2222 riauser@datalad-test-ria test -f /usr/local/apache2/htdocs/probe
   - sh: rm ~/DLTMP/riaroot/probe
+  - cmd: del C:\DLTMP\riaroot\probe
 
 
 test_script:
