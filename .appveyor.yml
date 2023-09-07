@@ -197,6 +197,7 @@ before_test:
   - datalad wtf
   # establish expected permission setup for SSH key
   - sh: chmod 600 tools/ci/ria-sshd/id_rsa
+  - sh: ssh-keygen -f "/home/appveyor/.ssh/known_hosts" -R "[localhost]:2222"
 
 
 test_script:
