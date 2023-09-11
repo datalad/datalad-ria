@@ -34,6 +34,21 @@ by archiving it using [zenodo.org](https://zenodo.org/).
 consider acknowledging contributors with the
 [allcontributors bot](https://allcontributors.org/docs/en/bot/overview).
 
+# Test setup
+
+The test battery included in the sources is designed to run tests against a
+configurable server. The default mode of operation is to perform all tests against
+localhost (given the necessary service availability). A number of environment
+variable (or configuration items) can be set to configure an alternative test target.
+
+- `DATALAD_TESTS_RIA_SERVER_SSH_HOST`: Hostname of the SSH server
+- `DATALAD_TESTS_RIA_SERVER_SSH_PORT`: Port of the SSH server
+- `DATALAD_TESTS_RIA_SERVER_SSH_LOGIN`: Username/login to use with the SSH server
+- `DATALAD_TESTS_RIA_SERVER_SSH_SECKEY`: Path to a local SSH private key to use for logging into the SSH server
+- `DATALAD_TESTS_RIA_SERVER_SSH_PATH`: Root path to run all tests under on the SSH server (absolute path)
+- `DATALAD_TESTS_RIA_SERVER_LOCALPATH`: If the directory pointed to by `DATALAD_TESTS_RIA_SERVER_SSH_PATH` is also available as a local mount, this is the path to the reespective local directory.
+
+
 # Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) if you are interested in internals or
