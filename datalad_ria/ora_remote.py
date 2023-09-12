@@ -65,7 +65,11 @@ class OraRemote(SpecialRemote):
             # Check __getattribute__() -- pretty much no other code in this
             # file will run! __getattribute__ will relay all top-level
             # operations to an instance of the legacy implementation
-            from datalad_ria.legacy import LegacyORARemote
+            from datalad.distributed.ora_remote import ORARemote as LegacyORARemote
+            lsr = LegacyORARemote(self.annex)
+            lsr.prepare()
+            # we can skip everything else, it won't be triggered anymore
+            self._legacy_special_remote = lsr
         pass
 
     def transfer_store(self, key, filename):
