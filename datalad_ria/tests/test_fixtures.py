@@ -22,3 +22,13 @@ def test_riaserver_fixture(ria_sshserver):
     # base url and local path
     assert len(ria_sshserver) == 2
     assert ria_sshserver[0].startswith('ria+ssh://')
+
+
+def test_populate_dataset_fixture(populated_dataset):
+    # populated_dataset is a Dataset object
+    assert populated_dataset.pathobj.exists()
+    assert (populated_dataset.pathobj / 'three.txt').exists()
+    with open(populated_dataset.pathobj / 'three.txt') as file:
+        payload = file.read()
+        assert payload == "content3"
+    assert (populated_dataset.pathobj / 'subdir').is_dir()

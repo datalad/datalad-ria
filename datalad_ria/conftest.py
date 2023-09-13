@@ -6,4 +6,5 @@ pytest_plugins = [
 
 from .tests.fixtures import (
     ria_sshserver,
+    populated_dataset,
 )
