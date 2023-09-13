@@ -7,5 +7,5 @@ pytest_plugins = [
 from .tests.fixtures import (
     ria_sshserver,
     ria_sshserver_setup,
-    common_init_opts,
+    common_ora_init_opts,
 )
