@@ -72,3 +72,11 @@ def ria_sshserver(ria_sshserver_setup, monkeypatch):
     with monkeypatch.context() as m:
         m.setenv("DATALAD_SSH_IDENTITYFILE", ria_sshserver_setup['SSH_SECKEY'])
         yield ria_baseurl, ria_sshserver_setup['LOCALPATH']
+
+
+@pytest.fixture(autouse=False, scope="function")
+def common_init_opts():
+    """Return common initialization arguments for the ora special remote"""
+    common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
+                        "autoenable=true"]
+    yield common_init_opts
