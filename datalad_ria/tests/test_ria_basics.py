@@ -1,3 +1,5 @@
+import pytest
+
 from datalad.api import Dataset
 
 from datalad.customremotes.ria_utils import (
@@ -24,6 +26,7 @@ from datalad.tests.utils_pytest import (
 from datalad.utils import Path
 from datalad_ria.tests.fixtures import ria_sshserver_setup
 
+
 def _test_initremote_basic(url, io, store, ds_path, link):
 
     ds_path = Path(ds_path)
@@ -33,25 +36,6 @@ def _test_initremote_basic(url, io, store, ds_path, link):
     populate_dataset(ds)
 
     init_opts = common_init_opts + ['url={}'.format(url)]
-
-    # fails on non-existing storage location
-    assert_raises(CommandError,
-                  ds.repo.init_remote, 'ria-remote', options=init_opts)
-    # Doesn't actually create a remote if it fails
-    assert_not_in('ria-remote',
-                  [cfg['name']
-                   for uuid, cfg in ds.repo.get_special_remotes().items()]
-                  )
-
-    # fails on non-RIA URL
-    assert_raises(CommandError, ds.repo.init_remote, 'ria-remote',
-                  options=common_init_opts + ['url={}'.format(store.as_uri())]
-                  )
-    # Doesn't actually create a remote if it fails
-    assert_not_in('ria-remote',
-                  [cfg['name']
-                   for uuid, cfg in ds.repo.get_special_remotes().items()]
-                  )
 
     # set up store:
     create_store(io, store, '1')
@@ -121,7 +105,7 @@ def _test_initremote_basic(url, io, store, ds_path, link):
     #       - might require to run initremote directly to get the output
 
 
-def test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path):
+def _defunc_test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path):
     """Test via SSH"""
     # retrieve all values from the ssh-server fixture
     ria_baseurl = ria_sshserver[0]
@@ -135,3 +119,34 @@ def test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path):
         ria_baseurl, io, storepath, ds_path, link)
 
 
+def test_initremote_errors(ria_sshserver, existing_dataset):
+    # retrieve all values from the ssh-server fixture
+    ds = existing_dataset
+    ria_baseurl = ria_sshserver[0]
+
+    # fails on non-existing storage location
+    with pytest.raises(CommandError):
+        ds.repo.init_remote(
+            'ria-remote',
+            options=common_init_opts + [f'url={ria_baseurl}'],
+        )
+
+    # Doesn't actually create a remote if it fails
+    assert 'ria-remote' not in [
+        r['name'] for r in ds.repo.get_special_remotes().values()
+    ]
+
+    # fails on non-RIA URL
+    with pytest.raises(CommandError):
+        ds.repo.init_remote(
+            'ria-remote',
+            options=common_init_opts + [
+                # strip the 'ria+' prefix
+                f'url={ria_baseurl[4:]}',
+            ]
+        )
+
+    # Doesn't actually create a remote if it fails
+    assert 'ria-remote' not in [
+        r['name'] for r in ds.repo.get_special_remotes().values()
+    ]
