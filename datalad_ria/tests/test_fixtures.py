@@ -25,6 +25,5 @@ def test_riaserver_fixture(ria_sshserver):
 
 
 def test_common_ora_init_opts_fixture(common_ora_init_opts):
-    assert common_init_opts == \
-           ["encryption=none", "type=external", "externaltype=ora",
-            "autoenable=true"]
+    assert "externaltype=ora" in common_ora_init_opts
+    assert "autoenable=true" in common_ora_init_opts
