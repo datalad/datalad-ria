@@ -22,7 +22,7 @@ from datalad.tests.utils_pytest import (
     has_symlink_capability,
 )
 from datalad.utils import Path
-
+from datalad_ria.tests.fixtures import ria_sshserver_setup
 
 def _test_initremote_basic(url, io, store, ds_path, link):
 
@@ -121,17 +121,17 @@ def _test_initremote_basic(url, io, store, ds_path, link):
     #       - might require to run initremote directly to get the output
 
 
-def test_initremote_basic_sshurl(ria_sshserver, tmp_path):
+def test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path):
     """Test via SSH"""
     # retrieve all values from the ssh-server fixture
-    host, port, login, key, path, localpath = ria_sshserver.values()
+    ria_baseurl = ria_sshserver[0]
     # create all parameters _test_initremote_basic() requires
-    storepath = tmp_path / "store"
-    url = f'ria+ssh://{login}@{host}:{storepath}'
-    io = SSHRemoteIO(host)
+    io = SSHRemoteIO(ria_sshserver_setup['HOST'])
     ds_path = Path(tmp_path / 'my-ds')
     link = tmp_path / "link"
+    # the store should be on the ssh server
+    storepath = ria_sshserver[1]
     _test_initremote_basic(
-        url, io, storepath, ds_path, link)
+        ria_baseurl, io, storepath, ds_path, link)
 
 
