@@ -6,6 +6,10 @@ import os
 from pathlib import Path
 import pytest
 
+from datalad_ria.utils import (
+    build_ria_url,
+)
+
 from datalad_next.tests.utils import (
     SkipTest,
 )
@@ -16,7 +20,7 @@ from datalad_ria.tests.utils import (
 
 
 @pytest.fixture(autouse=False, scope="session")
-def ria_sshserver(tmp_path_factory):
+def ria_sshserver_setup(tmp_path_factory):
     if not os.environ.get('DATALAD_TESTS_SSH'):
         raise SkipTest(
             "set DATALAD_TESTS_SSH=1 to enable")
@@ -55,3 +59,16 @@ def ria_sshserver(tmp_path_factory):
         info[e] = v
 
     yield info
+
+
+@pytest.fixture(autouse=False, scope="function")
+def ria_sshserver(ria_sshserver_setup, monkeypatch):
+    ria_baseurl = build_ria_url(
+        protocol='ssh',
+        host=ria_sshserver_setup['HOST'],
+        user=ria_sshserver_setup['SSH_LOGIN'],
+        path=ria_sshserver_setup['SSH_PATH'],
+    )
+    with monkeypatch.context() as m:
+        m.setenv("DATALAD_SSH_IDENTITYFILE", ria_sshserver_setup['SSH_SECKEY'])
+        yield ria_baseurl, ria_sshserver_setup['LOCALPATH']
