@@ -75,7 +75,7 @@ def ria_sshserver(ria_sshserver_setup, monkeypatch):
 
 
 @pytest.fixture(autouse=False, scope="function")
-def common_init_opts():
+def common_ora_init_opts():
     """Return common initialization arguments for the ora special remote"""
     common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
                         "autoenable=true"]
