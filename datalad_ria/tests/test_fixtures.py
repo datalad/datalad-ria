@@ -22,3 +22,9 @@ def test_riaserver_fixture(ria_sshserver):
     # base url and local path
     assert len(ria_sshserver) == 2
     assert ria_sshserver[0].startswith('ria+ssh://')
+
+
+def test_common_init_opts_fixture(common_init_opts):
+    assert common_init_opts == \
+           ["encryption=none", "type=external", "externaltype=ora",
+            "autoenable=true"]
