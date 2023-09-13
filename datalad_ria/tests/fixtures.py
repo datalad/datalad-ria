@@ -5,38 +5,14 @@ import getpass
 import os
 from pathlib import Path
 import pytest
-import subprocess
 
 from datalad_next.tests.utils import (
     SkipTest,
 )
 
-
-def verify_ssh_access(host, port, login, seckey, path, localpath):
-    # we can only handle openssh
-    ssh_bin = os.environ.get('DATALAD_SSH_EXECUTABLE', 'ssh')
-
-    ssh_call = [
-        ssh_bin,
-        '-i', seckey,
-        '-p', port,
-        f'{login}@{host}',
-    ]
-    # now try if this is a viable configuration
-    # verify execute and write permissions (implicitly also POSIX path handling
-    subprocess.run(
-        ssh_call + [f"bash -c 'mkdir -p {path} && touch {path}/datalad-tests-probe'"],
-        check=True,
-    )
-    if localpath:
-        # check if a given
-        assert (Path(localpath) / 'datalad-tests-probe').exists()
-    subprocess.run(
-        ssh_call + [f"bash -c 'rm {path}/datalad-tests-probe'"],
-        check=True,
-    )
-    if localpath:
-        assert not (Path(localpath) / 'datalad-tests-probe').exists()
+from datalad_ria.tests.utils import (
+    assert_ssh_access,
+)
 
 
 @pytest.fixture(autouse=False, scope="session")
@@ -61,7 +37,7 @@ def ria_sshserver(tmp_path_factory):
     path = os.environ.get('DATALAD_TESTS_RIA_SERVER_SSH_PATH', tmp_riaroot)
     localpath = os.environ.get('DATALAD_TESTS_RIA_SERVER_LOCALPATH', tmp_riaroot)
 
-    verify_ssh_access(host, port, login, seckey, path, localpath)
+    assert_ssh_access(host, port, login, seckey, path, localpath)
 
     info = {}
     # as far as we can tell, this is good, post effective config in ENV
