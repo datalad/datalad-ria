@@ -90,3 +90,11 @@ def populated_dataset(existing_dataset):
     create_tree(existing_dataset.path, tree, archives_leading_dir=False)
     existing_dataset.save(result_renderer='disabled')
     yield existing_dataset
+
+    
+@pytest.fixture(autouse=False, scope="function")
+def common_ora_init_opts():
+    """Return common initialization arguments for the ora special remote"""
+    common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
+                        "autoenable=true"]
+    yield common_init_opts
