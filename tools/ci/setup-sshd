@@ -7,7 +7,7 @@ DATALAD_TESTS_RIA_SERVER_SSH_SECKEY=${DATALAD_TESTS_RIA_SERVER_SSH_SECKEY:-$HOME
 
 function setup_docker () {
   # obtain the docker image for SSH testing
-  curl -fsSL -o sshd.dockerimg.gz "${DATALAD_TESTS_DOCKER_SSHD_DOWNLOADURL}"
+  curl -fsSL --ssl-no-revoke -o sshd.dockerimg.gz "${DATALAD_TESTS_DOCKER_SSHD_DOWNLOADURL}"
   gzip -c -d sshd.dockerimg.gz | docker load
 
   # obtain the matching SSH private key for SSH server login
