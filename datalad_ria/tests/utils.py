@@ -38,6 +38,7 @@ def assert_ssh_access(
     subprocess.run(
         ssh_call + [
             f"bash -c 'mkdir -p {path} && touch {path}/datalad-tests-probe'"],
+        stdin=subprocess.PIPE,
         check=True,
     )
     if localpath:
@@ -45,6 +46,7 @@ def assert_ssh_access(
         assert (Path(localpath) / 'datalad-tests-probe').exists()
     subprocess.run(
         ssh_call + [f"bash -c 'rm {path}/datalad-tests-probe'"],
+        stdin=subprocess.PIPE,
         check=True,
     )
     if localpath:

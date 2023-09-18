@@ -6,3 +6,4 @@ DataLad patches
    :toctree: generated
 
    ssh_exec
+   sshremoteio
