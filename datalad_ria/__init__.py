@@ -26,6 +26,9 @@ command_suite = (
     ]
 )
 
+# patch datalad-core
+import datalad_ria.patches.enabled
+
 from ._version import get_versions
 __version__ = get_versions()['version']
 del get_versions
