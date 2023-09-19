@@ -231,13 +231,13 @@ for:
     # cloning it
     init:
       # remove 260-char limit on path names
-      - cmd: powershell Set-Itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -value 1
+      - ps: Set-Itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -value 1
       # enable developer mode
       # this should enable mklink without admin privileges, but it doesn't seem to work
       #- cmd: powershell tools\ci\appveyor_enable_windevmode.ps1
       # enable RDP access (RDP password is in appveyor project config)
       # this is relatively expensive (1-2min), but very convenient to jump into any build at any time
-      - cmd: powershell.exe iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+      - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
       # Scratch space
       - cmd: md C:\DLTMP
       # and use that scratch space to get short paths in test repos
@@ -277,7 +277,7 @@ for:
 
     on_finish:
       # conditionally block the exit of a CI run for direct debugging
-      - cmd: powershell.exe while ((Test-Path "C:\Users\\appveyor\\Desktop\\BLOCK.txt")) { Start-Sleep 5 }
+      - ps: while ((Test-Path "C:\Users\\appveyor\\Desktop\\BLOCK.txt")) { Start-Sleep 5 }
 
 
 #
