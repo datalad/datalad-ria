@@ -72,6 +72,21 @@ environment:
       DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
       DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
 
+    # same as 'test-linux', but TMPDIR is on a crippled filesystem, causing
+    # most, if not all test datasets to be created on that filesystem
+    - job_name: test-linux-crippled
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      # system git-annex is way too old, use better one
+      INSTALL_GITANNEX: git-annex -m snapshot
+      CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
+      PY: 3.8
+      DATALAD_TESTS_RIA_SERVER_SSH_HOST: datalad-test-ria
+      DATALAD_TESTS_RIA_SERVER_SSH_PORT: 2222
+      DATALAD_TESTS_RIA_SERVER_SSH_LOGIN: sshuser
+      DATALAD_TESTS_RIA_SERVER_SSH_SECKEY: /home/appveyor/.ssh/datalad_tests_id_rsa
+      DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
+      DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
+
     - job_name: test-win
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       # Python version specification is non-standard on windows
@@ -128,6 +143,7 @@ for:
   - matrix:
       only:
         - job_name: test-linux
+        - job_name: test-linux-crippled
         - job_name: test-mac
 
     cache:
@@ -166,10 +182,30 @@ for:
       - tools/ci/verify-ssh-access
 
     test_script:
+      # store original TMPDIR setting to limit modification to test execution
+      - export PREV_TMPDIR=$TMPDIR
+      # make TMPDIR a "crippled filesystem" to test wrong assumptions of POSIX-ness
+      # on POSIX OSes. The test fixtures will create all test datasets under TMPDIR
+      - |
+        set -e
+        if [ "$APPVEYOR_JOB_NAME" = "test-linux-crippled" ]; then
+          # 500 MB VFAT FS in a box
+          sudo dd if=/dev/zero of=/crippledfs.img count=500 bs=1M
+          sudo mkfs.vfat /crippledfs.img
+          sudo mkdir /crippledfs
+          sudo mount -o "uid=$(id -u),gid=$(id -g)" /crippledfs.img /crippledfs
+          echo "== mount >>"
+          mount | grep crippled
+          echo "<< mount =="
+          export TMPDIR=/crippledfs
+        fi
+      - echo TMPDIR=$TMPDIR
       # run tests on installed module, not source tree files
       - mkdir __testhome__
       - cd __testhome__
       - python -m pytest -s -v -m "not (turtle)" --doctest-modules --cov=datalad_ria --pyargs ${DTS}
+      # restiore original TMPDIR
+      - export TMPDIR=$PREV_TMPDIR
 
     after_test:
       - python -m coverage xml
