@@ -103,6 +103,14 @@ environment:
 skip_commits:
   files:
     - docs/
+    - .github/
+    - changelog.d/
+    - .datalad-release-action.yaml
+    - readthedocs.yml
+    - zenodo.json
+    - '*.md'
+    - CONTRIBUTING.md
+    - CONTRIBUTORS
 
 
 # tests need specific hostnames to be available
