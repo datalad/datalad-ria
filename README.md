@@ -1,9 +1,9 @@
 # DataLad RIA
 
+[![Documentation Status](https://readthedocs.org/projects/datalad-ria/badge/?version=latest)](http://docs.datalad.org/projects/ria/en/latest/?badge=latest)
 [![Build status](https://ci.appveyor.com/api/projects/status/fki6s86rl13davfe/branch/main?svg=true)](https://ci.appveyor.com/project/mih/datalad-ria/branch/main)
 [![codecov.io](https://codecov.io/github/datalad/datalad-ria/coverage.svg?branch=main)](https://codecov.io/github/datalad/datalad-ria?branch=main)
-[![crippled-filesystems](https://github.com/datalad/datalad-ria/workflows/crippled-filesystems/badge.svg)](https://github.com/datalad/datalad-ria/actions?query=workflow%3Acrippled-filesystems)
-[![docs](https://github.com/datalad/datalad-ria/workflows/docs/badge.svg)](https://github.com/datalad/datalad-ria/actions?query=workflow%3Adocs)
+[![Documentation test builds](https://github.com/datalad/datalad-ria/workflows/docs/badge.svg)](https://github.com/datalad/datalad-ria/actions?query=workflow%3Adocs)
 
 This datalad extension will contain a modernized and improved implementation for RIA-related functionality.
 It is currently a work-in-progress.

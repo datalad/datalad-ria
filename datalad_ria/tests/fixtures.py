@@ -5,42 +5,22 @@ import getpass
 import os
 from pathlib import Path
 import pytest
-import subprocess
+
+from datalad_ria.utils import (
+    build_ria_url,
+)
 
 from datalad_next.tests.utils import (
     SkipTest,
 )
 
-
-def verify_ssh_access(host, port, login, seckey, path, localpath):
-    # we can only handle openssh
-    ssh_bin = os.environ.get('DATALAD_SSH_EXECUTABLE', 'ssh')
-
-    ssh_call = [
-        ssh_bin,
-        '-i', seckey,
-        '-p', port,
-        f'{login}@{host}',
-    ]
-    # now try if this is a viable configuration
-    # verify execute and write permissions (implicitly also POSIX path handling
-    subprocess.run(
-        ssh_call + [f"bash -c 'mkdir -p {path} && touch {path}/datalad-tests-probe'"],
-        check=True,
-    )
-    if localpath:
-        # check if a given
-        assert (Path(localpath) / 'datalad-tests-probe').exists()
-    subprocess.run(
-        ssh_call + [f"bash -c 'rm {path}/datalad-tests-probe'"],
-        check=True,
-    )
-    if localpath:
-        assert not (Path(localpath) / 'datalad-tests-probe').exists()
+from datalad_ria.tests.utils import (
+    assert_ssh_access,
+)
 
 
 @pytest.fixture(autouse=False, scope="session")
-def ria_sshserver(tmp_path_factory):
+def ria_sshserver_setup(tmp_path_factory):
     if not os.environ.get('DATALAD_TESTS_SSH'):
         raise SkipTest(
             "set DATALAD_TESTS_SSH=1 to enable")
@@ -61,7 +41,7 @@ def ria_sshserver(tmp_path_factory):
     path = os.environ.get('DATALAD_TESTS_RIA_SERVER_SSH_PATH', tmp_riaroot)
     localpath = os.environ.get('DATALAD_TESTS_RIA_SERVER_LOCALPATH', tmp_riaroot)
 
-    verify_ssh_access(host, port, login, seckey, path, localpath)
+    assert_ssh_access(host, port, login, seckey, path, localpath)
 
     info = {}
     # as far as we can tell, this is good, post effective config in ENV
@@ -79,3 +59,27 @@ def ria_sshserver(tmp_path_factory):
         info[e] = v
 
     yield info
+
+
+@pytest.fixture(autouse=False, scope="function")
+def ria_sshserver(ria_sshserver_setup, datalad_cfg, monkeypatch):
+    ria_baseurl = build_ria_url(
+        protocol='ssh',
+        host=ria_sshserver_setup['HOST'],
+        user=ria_sshserver_setup['SSH_LOGIN'],
+        path=ria_sshserver_setup['SSH_PATH'],
+    )
+    with monkeypatch.context() as m:
+        m.setenv("DATALAD_SSH_IDENTITYFILE", ria_sshserver_setup['SSH_SECKEY'])
+        # force reload the config manager, to ensure the private key setting
+        # makes it into the active config
+        datalad_cfg.reload(force=True)
+        yield ria_baseurl, ria_sshserver_setup['LOCALPATH']
+
+
+@pytest.fixture(autouse=False, scope="function")
+def common_ora_init_opts():
+    """Return common initialization arguments for the ora special remote"""
+    common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
+                        "autoenable=true"]
+    yield common_init_opts

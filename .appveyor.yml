@@ -72,6 +72,21 @@ environment:
       DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
       DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
 
+    # same as 'test-linux', but TMPDIR is on a crippled filesystem, causing
+    # most, if not all test datasets to be created on that filesystem
+    - job_name: test-linux-crippled
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      # system git-annex is way too old, use better one
+      INSTALL_GITANNEX: git-annex -m snapshot
+      CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
+      PY: 3.8
+      DATALAD_TESTS_RIA_SERVER_SSH_HOST: datalad-test-ria
+      DATALAD_TESTS_RIA_SERVER_SSH_PORT: 2222
+      DATALAD_TESTS_RIA_SERVER_SSH_LOGIN: sshuser
+      DATALAD_TESTS_RIA_SERVER_SSH_SECKEY: /home/appveyor/.ssh/datalad_tests_id_rsa
+      DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
+      DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
+
     - job_name: test-win
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
       # Python version specification is non-standard on windows
@@ -103,6 +118,14 @@ environment:
 skip_commits:
   files:
     - docs/
+    - .github/
+    - changelog.d/
+    - .datalad-release-action.yaml
+    - readthedocs.yml
+    - zenodo.json
+    - '*.md'
+    - CONTRIBUTING.md
+    - CONTRIBUTORS
 
 
 # tests need specific hostnames to be available
@@ -120,6 +143,7 @@ for:
   - matrix:
       only:
         - job_name: test-linux
+        - job_name: test-linux-crippled
         - job_name: test-mac
 
     cache:
@@ -158,10 +182,30 @@ for:
       - tools/ci/verify-ssh-access
 
     test_script:
+      # store original TMPDIR setting to limit modification to test execution
+      - export PREV_TMPDIR=$TMPDIR
+      # make TMPDIR a "crippled filesystem" to test wrong assumptions of POSIX-ness
+      # on POSIX OSes. The test fixtures will create all test datasets under TMPDIR
+      - |
+        set -e
+        if [ "$APPVEYOR_JOB_NAME" = "test-linux-crippled" ]; then
+          # 500 MB VFAT FS in a box
+          sudo dd if=/dev/zero of=/crippledfs.img count=500 bs=1M
+          sudo mkfs.vfat /crippledfs.img
+          sudo mkdir /crippledfs
+          sudo mount -o "uid=$(id -u),gid=$(id -g)" /crippledfs.img /crippledfs
+          echo "== mount >>"
+          mount | grep crippled
+          echo "<< mount =="
+          export TMPDIR=/crippledfs
+        fi
+      - echo TMPDIR=$TMPDIR
       # run tests on installed module, not source tree files
       - mkdir __testhome__
       - cd __testhome__
       - python -m pytest -s -v -m "not (turtle)" --doctest-modules --cov=datalad_ria --pyargs ${DTS}
+      # restiore original TMPDIR
+      - export TMPDIR=$PREV_TMPDIR
 
     after_test:
       - python -m coverage xml
@@ -187,13 +231,13 @@ for:
     # cloning it
     init:
       # remove 260-char limit on path names
-      - cmd: powershell Set-Itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -value 1
+      - ps: Set-Itemproperty -path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" -Name LongPathsEnabled -value 1
       # enable developer mode
       # this should enable mklink without admin privileges, but it doesn't seem to work
       #- cmd: powershell tools\ci\appveyor_enable_windevmode.ps1
       # enable RDP access (RDP password is in appveyor project config)
       # this is relatively expensive (1-2min), but very convenient to jump into any build at any time
-      - cmd: powershell.exe iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+      - ps: iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
       # Scratch space
       - cmd: md C:\DLTMP
       # and use that scratch space to get short paths in test repos
@@ -233,7 +277,7 @@ for:
 
     on_finish:
       # conditionally block the exit of a CI run for direct debugging
-      - cmd: powershell.exe while ((Test-Path "C:\Users\\appveyor\\Desktop\\BLOCK.txt")) { Start-Sleep 5 }
+      - ps: while ((Test-Path "C:\Users\\appveyor\\Desktop\\BLOCK.txt")) { Start-Sleep 5 }
 
 
 #
