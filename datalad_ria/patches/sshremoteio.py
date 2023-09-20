@@ -57,45 +57,6 @@ DEFAULT_BUFFER_SIZE = COPY_BUFSIZE
 # The method 'SSHRemoteIO__init__' is a patched version of
 # 'datalad/distributed/ora-remote.py:SSHRemoteIO.__init___'
 # from datalad@8a145bf432ae8931be7039c97ff602e53813d238
-#
-# There were changes in multiple places of the original
-# method. For reference, the following is a copy of the
-# original method:
-#
-# def __init__(self, host, buffer_size=DEFAULT_BUFFER_SIZE):
-#     """
-#     Parameters
-#     ----------
-#     host : str
-#       SSH-accessible host(name) to perform remote IO operations
-#       on.
-#     """
-#
-#     # the connection to the remote
-#     # we don't open it yet, not yet clear if needed
-#     self.ssh = ssh_manager.get_connection(
-#         host,
-#         use_remote_annex_bundle=False,
-#     )
-#     self.ssh.open()
-#     # open a remote shell
-#     cmd = ['ssh'] + self.ssh._ssh_args + [self.ssh.sshri.as_str()]
-#     self.shell = subprocess.Popen(cmd,
-#                                   stderr=subprocess.DEVNULL,
-#                                   stdout=subprocess.PIPE,
-#                                   stdin=subprocess.PIPE)
-#     # swallow login message(s):
-#     self.shell.stdin.write(b"echo RIA-REMOTE-LOGIN-END\n")
-#     self.shell.stdin.flush()
-#     while True:
-#         line = self.shell.stdout.readline()
-#         if line == b"RIA-REMOTE-LOGIN-END\n":
-#             break
-#     # TODO: Same for stderr?
-#
-#     # make sure default is used when None was passed, too.
-#     self.buffer_size = buffer_size if buffer_size else DEFAULT_BUFFER_SIZE
-#
 def SSHRemoteIO__init__(self, host, buffer_size=DEFAULT_BUFFER_SIZE):
     """
     Parameters
