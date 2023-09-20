@@ -64,7 +64,7 @@ def ria_sshserver_setup(tmp_path_factory):
 
 
 @pytest.fixture(autouse=False, scope="function")
-def ria_sshserver(ria_sshserver_setup, monkeypatch):
+def ria_sshserver(ria_sshserver_setup, datalad_cfg, monkeypatch):
     ria_baseurl = build_ria_url(
         protocol='ssh',
         host=ria_sshserver_setup['HOST'],
@@ -73,6 +73,9 @@ def ria_sshserver(ria_sshserver_setup, monkeypatch):
     )
     with monkeypatch.context() as m:
         m.setenv("DATALAD_SSH_IDENTITYFILE", ria_sshserver_setup['SSH_SECKEY'])
+        # force reload the config manager, to ensure the private key setting
+        # makes it into the active config
+        datalad_cfg.reload(force=True)
         yield ria_baseurl, ria_sshserver_setup['LOCALPATH']
 
 
