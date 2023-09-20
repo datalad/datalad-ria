@@ -4,9 +4,7 @@ This change introduces a replacement for core's
 ``datalad/support/sshconnector.py:BaseSSHConnection._exec_ssh()``
 with a dedicated handling of ``stdin`` for Windows.
 
-Without this change, the first remote command execution would succeed,
-but upon exit the Python session would somehow "loose" its own ``stdin``
-file descriptor.
+The OpenSSH client in Windows modifies its ``stdin``-descriptor in such a way, that it becomes unusable for the python process, if the ``stdin``-descriptor is shared between the ``python``-process and the ``ssh``-process. As a result, all read-operations that the ``python``-process performs on ``stdin`` will block and leave the python-process "hanging".
 
 This change passes an explicit, empty, byte-string as ``stdin`` to the
 SSH client call, in order to avoid any interaction of SSH with the
