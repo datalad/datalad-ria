@@ -1,6 +1,16 @@
-"""
+"""Enable SSH-based remote command execution on Windows
 
-With this patch ...
+This change introduces a replacement for core's
+``datalad/support/sshconnector.py:BaseSSHConnection._exec_ssh()``
+with a dedicated handling of ``stdin`` for Windows.
+
+Without this change, the first remote command execution would succeed,
+but upon exit the Python session would somehow "loose" its own ``stdin``
+file descriptor.
+
+This change passes an explicit, empty, byte-string as ``stdin`` to the
+SSH client call, in order to avoid any interaction of SSH with the
+parent process's ``stdin`` descriptor.
 """
 
 import logging

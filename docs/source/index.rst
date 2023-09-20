@@ -39,6 +39,18 @@ Command line reference
    generated/man/datalad-create-sibling-ria2
 
 
+DataLad patches
+---------------
+
+Patches that are automatically applied to DataLad when loading the
+``datalad-ria`` extension package.
+
+.. toctree::
+   :maxdepth: 2
+
+   patches.rst
+
+
 Indices and tables
 ==================
 
