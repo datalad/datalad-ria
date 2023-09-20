@@ -36,9 +36,12 @@ fixes the description of the condition in the comment on the use of
 import logging
 import subprocess
 
-from datalad import ssh_manager
+from datalad.distributed.ora_remote import ssh_manager
+# we need to get this from elsewhere, the orginal code does local imports
 from datalad.support.exceptions import CommandError
+# we need this for a conditional that is not part of the original code
 from datalad.support.sshconnector import NoMultiplexSSHConnection
+
 from datalad_next.utils.consts import COPY_BUFSIZE
 from datalad_next.patches import apply_patch
 
