@@ -1,41 +1,36 @@
-"""
-
-This patch fixes errors in the __init__ function of
-datalad.distributed.ora_remote.py:SSHRemoteIO.
+"""Enable `SSHRemoteIO` operation on Windows
 
 The original code has two problems.
 
-1. The `cmd`-argument for the shell ssh-process, which is created by:
-   `self.shell = subprocess.Popen(cmd, ...)`
-   is not correct, if `self.ssh` is an instance of `NoMultiplexSSHConnection`.
+1. The ``cmd``-argument for the shell ssh-process, which is created by:
+   ``self.shell = subprocess.Popen(cmd, ...)`` is not correct, if ``self.ssh``i
+   is an instance of ``NoMultiplexSSHConnection``.
 
-   The changes in this patch build the correct `cmd`-argument by adding
-   additional arguments to `cmd`, if `self.ssh` is an instance of
-   `NoMultiplexSSHConnection`. More precisely, the arguments that are
-   required to open a "shell" in a `NoMultiplexSSHConnection` are stored
-   in `NoMultiplexSSHConnection._ssh_open_args` and not in
-   `NoMultiplexSSHConnection._ssh_args`. This patch therefore provides
-   arguments from both lists, i.e. from `_ssh_args` and `_ssh_open_args` in the
-   call that opens a "shell", if `self.ssh` is an instance of
-   `NoMultiplexSSHConnection`.
+   The changes in this patch build the correct ``cmd``-argument by adding
+   additional arguments to ``cmd``, if `self.ssh` is an instance of
+   ``NoMultiplexSSHConnection``. More precisely, the arguments that are
+   required to open a "shell" in a ``NoMultiplexSSHConnection`` are stored in
+   ``NoMultiplexSSHConnection._ssh_open_args`` and not in
+   ``NoMultiplexSSHConnection._ssh_args``. This patch therefore provides
+   arguments from both lists, i.e. from ``_ssh_args`` and ``_ssh_open_args`` in
+   the call that opens a "shell", if ``self.ssh`` is an instance of
+   ``NoMultiplexSSHConnection``.
 
-2. The while-loop that waits to read `b"RIA-REMOTE-LOGIN-END\n"` from the
+2. The while-loop that waits to read ``b"RIA-REMOTE-LOGIN-END\\n"`` from the
    shell ssh-process did not contain any error handling. That led to an
-   infinite loop in case that the shell ssh-process terminates without
-   writing `b"RIA-REMOTE-LOGIN-END\n"` to its stdout, or in the case that
-   the stdout-pipeline of the shell ssh-process is closed.
+   infinite loop in case that the shell ssh-process terminates without writing
+   ``b"RIA-REMOTE-LOGIN-END\\n"`` to its stdout, or in the case that the
+   stdout-pipeline of the shell ssh-process is closed.
 
    This patch introduces two checks into the while loop. One check for
    termination of the ssh shell-process, and one check for a closed
-   stdout-pipeline of the ssh shell-process, i.e. reading an EOF from
-   the stdout-pipeline. If any of those two cases appears, an exception is
-   raised.
+   stdout-pipeline of the ssh shell-process, i.e. reading an EOF from the
+   stdout-pipeline. If any of those two cases appears, an exception is raised.
 
 In addition, this patch modifies two comments. It adds a missing description of
-the `buffer_size`-parameter of `SSHRemoteIO.__init__`to the doc-string, and
+the ``buffer_size``-parameter of ``SSHRemoteIO.__init__``to the doc-string, and
 fixes the description of the condition in the comment on the use of
-`DEFAULT_BUFFER_SIZE`.
-
+``DEFAULT_BUFFER_SIZE``.
 """
 
 import logging
