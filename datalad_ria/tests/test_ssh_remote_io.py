@@ -21,11 +21,15 @@ def ssh_remote_wdir(ssh_remoteio, ria_sshserver_setup):
     directory at the end.
     """
     sshpath = PurePosixPath(ria_sshserver_setup['SSH_PATH'])
-    out, err = ssh_remoteio.ssh(f'mktemp -d -p {sshpath}')
+    out, err = ssh_remoteio.ssh(f'mktemp -d {sshpath}/sshremotewdir.XXXXXXXX')
+    # hopefully catch more stupid errors of unexpectedness
+    assert '/sshremotewdir' in out
     wdir = PurePosixPath(out.rstrip('\n'))
     yield ssh_remoteio, wdir
     # clean up
-    ssh_remoteio.ssh(f'echo rm -rf "{wdir}"')
+    # only run dangerous 'rm -rf' if needed
+    if ssh_remoteio.exists(wdir):
+        ssh_remoteio.ssh(f'echo rm -rf "{wdir}"')
 
 
 def test_SSHRemoteIO_read_file(ssh_remoteio):
