@@ -1,7 +1,10 @@
 from pathlib import PurePosixPath
 import pytest
 
-from datalad.distributed.ora_remote import SSHRemoteIO
+from datalad.distributed.ora_remote import (
+    RemoteCommandFailedError,
+    SSHRemoteIO,
+)
 
 
 @pytest.fixture(autouse=False, scope="function")
@@ -65,8 +68,8 @@ def test_SSHRemoteIO_handledir(ssh_remoteio, ria_sshserver_setup):
     ssh_remoteio.write_file(targetfpath, 'dummy')
     assert ssh_remoteio.exists(targetfpath)
 
-    # XXX calling remove_dir()has no effect, and causes no error!!!
-    ssh_remoteio.remove_dir(targetdir)
+    with pytest.raises(RemoteCommandFailedError):
+        ssh_remoteio.remove_dir(targetdir)
     assert ssh_remoteio.exists(targetdir)
 
     # we must "know" that there is content and remove it

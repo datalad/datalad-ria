@@ -34,6 +34,10 @@ The original code has a number of problems.
    by prefixing the marker itself with a newline (which is withheld form the
    actual output).
 
+4. ``SSHRemoteIO.remove_dir()`` would not fail (unlike ``FileIO.remove_dir()``)
+   when ran on a non-empty directory. Despite not failing, it would also not
+   remove that directory.
+
 In addition, this patch modifies two comments. It adds a missing description of
 the ``buffer_size``-parameter of ``SSHRemoteIO.__init__``to the doc-string, and
 fixes the description of the condition in the comment on the use of
@@ -182,9 +186,22 @@ def SSHRemoteIO_run(self, cmd, no_output=True, check=False):
     return "".join(lines)
 
 
+# The method 'SSHRemoteIO_run' is a patched version of
+# 'datalad/distributed/ora-remote.py:SSHRemoteIO._run'
+# from datalad@58b8e06317fe1a03290aed80526bff1e2d5b7797
+def SSHRemoteIO_remove_dir(self, path):
+    with self.ensure_writeable(path.parent):
+        self._run('rmdir {}'.format(sh_quote(str(path))),
+                  # THIS IS THE PATCH
+                  # we want it to fail, like rmdir() would fail
+                  # on non-empty dirs
+                  check=True)
+
+
 for target, patch in (
         ('__init__', SSHRemoteIO__init__),
         ('_append_end_markers', SSHRemoteIO_append_end_markers),
         ('_run', SSHRemoteIO_run),
+        ('remove_dir', SSHRemoteIO_remove_dir),
 ):
     apply_patch('datalad.distributed.ora_remote', 'SSHRemoteIO', target, patch)
