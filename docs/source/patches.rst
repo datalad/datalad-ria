@@ -7,3 +7,4 @@ DataLad patches
 
    ssh_exec
    sshremoteio
+   sshconnector
