@@ -49,7 +49,7 @@ variable (or configuration items) can be set to configure an alternative test ta
 - `DATALAD_TESTS_RIA_SERVER_SSH_LOGIN`: Username/login to use with the SSH server
 - `DATALAD_TESTS_RIA_SERVER_SSH_SECKEY`: Path to a local SSH private key to use for logging into the SSH server
 - `DATALAD_TESTS_RIA_SERVER_SSH_PATH`: Root path to run all tests under on the SSH server (absolute path)
-- `DATALAD_TESTS_RIA_SERVER_LOCALPATH`: If the directory pointed to by `DATALAD_TESTS_RIA_SERVER_SSH_PATH` is also available as a local mount, this is the path to the reespective local directory.
+- `DATALAD_TESTS_RIA_SERVER_LOCALPATH`: If the directory pointed to by `DATALAD_TESTS_RIA_SERVER_SSH_PATH` is also available as a local mount, this is the path to the respective local directory. Set to an empty string to indicate that no local path is available.
 
 
 # Contributing
