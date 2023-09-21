@@ -101,3 +101,22 @@ def common_ora_init_opts():
     common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
                         "autoenable=true"]
     yield common_init_opts
+
+@pytest.fixture(autouse=False, scope="function")
+def create_store_ssh(ssh_remote_wdir):
+    """Take the RIA SSH Server test setup and create a store skeleton there.
+    It returns a store url following the pattern
+    ria+ssh//<user>@<host>:<port>/<basepath>, the RIA SSH Server setup, and the
+    basepath to the store on the SSH server"""
+    remoteio, basepath = ssh_remote_wdir
+    error_logs = basepath / 'error_logs'
+    version_file = basepath / 'ria-layout-version'
+    remoteio.mkdir(basepath)
+    remoteio.write_file(error_logs, '')
+    remoteio.write_file(version_file, '1')
+    store_url = build_ria_url(protocol='ssh',
+                              host=remoteio.ssh.sshri.hostname,
+                              user=remoteio.ssh.sshri.username,
+                              port=remoteio.ssh.sshri.port,
+                              path=str(basepath))
+    return store_url, remoteio, basepath
