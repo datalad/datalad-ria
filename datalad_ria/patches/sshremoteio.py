@@ -182,15 +182,9 @@ def SSHRemoteIO_run(self, cmd, no_output=True, check=False):
     return "".join(lines)
 
 
-apply_patch(
-    'datalad.distributed.ora_remote', 'SSHRemoteIO', '__init__',
-    SSHRemoteIO__init__,
-)
-apply_patch(
-    'datalad.distributed.ora_remote', 'SSHRemoteIO', '_append_end_markers',
-    SSHRemoteIO_append_end_markers,
-)
-apply_patch(
-    'datalad.distributed.ora_remote', 'SSHRemoteIO', '_run',
-    SSHRemoteIO_run,
-)
+for target, patch in (
+        ('__init__', SSHRemoteIO__init__),
+        ('_append_end_markers', SSHRemoteIO_append_end_markers),
+        ('_run', SSHRemoteIO_run),
+):
+    apply_patch('datalad.distributed.ora_remote', 'SSHRemoteIO', target, patch)
