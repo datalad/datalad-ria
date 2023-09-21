@@ -9,10 +9,7 @@ from datalad.customremotes.ria_utils import (
 from datalad.distributed.ora_remote import (
     SSHRemoteIO,
 )
-from datalad.distributed.tests.ria_utils import (
-    common_init_opts,
-    populate_dataset,
-)
+
 from datalad.support.exceptions import (
     CommandError,
 )
@@ -21,18 +18,16 @@ from datalad.tests.utils_pytest import (
     has_symlink_capability,
 )
 from datalad.utils import Path
-from datalad_ria.tests.fixtures import ria_sshserver_setup
 
 
-def _test_initremote_basic(url, io, store, ds_path, link):
+def _test_initremote_basic(url, io, store, link, populated_dataset,
+                           common_ora_init_opts):
 
-    ds_path = Path(ds_path)
     store = Path(store)
     link = Path(link)
-    ds = Dataset(ds_path).create()
-    populate_dataset(ds)
+    ds = populated_dataset
 
-    init_opts = common_init_opts + ['url={}'.format(url)]
+    init_opts = common_ora_init_opts + ['url={}'.format(url)]
 
     # set up store:
     create_store(io, store, '1')
@@ -51,35 +46,36 @@ def _test_initremote_basic(url, io, store, ds_path, link):
     assert_repo_status(ds.path)
     # git-annex:remote.log should have:
     #   - url
-    #   - common_init_opts
+    #   - common_ora_init_opts
     #   - archive_id (which equals ds id)
     remote_log = ds.repo.call_git(['cat-file', 'blob', 'git-annex:remote.log'],
                                   read_only=True)
     assert "url={}".format(url) in remote_log
-    for c in common_init_opts:
+    for c in common_ora_init_opts:
         assert c in remote_log
     assert "archive-id={}".format(ds.id) in remote_log
 
     # re-configure with invalid URL should fail:
     with pytest.raises(CommandError):
-        ds.repo.call_annex(['enableremote', 'ria-remote'] + common_init_opts +
+        ds.repo.call_annex(['enableremote', 'ria-remote'] +
+                           common_ora_init_opts +
                            ['url=ria+file:///non-existing'])
     # but re-configure with valid URL should work
     if has_symlink_capability():
         link.symlink_to(store)
         new_url = 'ria+{}'.format(link.as_uri())
         ds.repo.call_annex(
-            ['enableremote', 'ria-remote'] + common_init_opts + [
+            ['enableremote', 'ria-remote'] + common_ora_init_opts + [
                 'url={}'.format(new_url)])
         # git-annex:remote.log should have:
         #   - url
-        #   - common_init_opts
+        #   - common_ora_init_opts
         #   - archive_id (which equals ds id)
         remote_log = ds.repo.call_git(['cat-file', 'blob',
                                        'git-annex:remote.log'],
                                       read_only=True)
         assert "url={}".format(new_url) in remote_log
-        for c in common_init_opts:
+        for c in common_ora_init_opts:
             assert c in remote_log
         assert "archive-id={}".format(ds.id) in remote_log
 
@@ -98,21 +94,22 @@ def _test_initremote_basic(url, io, store, ds_path, link):
     #       - might require to run initremote directly to get the output
 
 
-def _defunc_test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path):
+def _defunc_test_initremote_basic_sshurl(ria_sshserver, ria_sshserver_setup, tmp_path,
+                                             populated_dataset, common_ora_init_opts):
     """Test via SSH"""
     # retrieve all values from the ssh-server fixture
     ria_baseurl = ria_sshserver[0]
     # create all parameters _test_initremote_basic() requires
     io = SSHRemoteIO(ria_sshserver_setup['HOST'])
-    ds_path = Path(tmp_path / 'my-ds')
     link = tmp_path / "link"
     # the store should be on the ssh server
     storepath = ria_sshserver[1]
     _test_initremote_basic(
-        ria_baseurl, io, storepath, ds_path, link)
+        ria_baseurl, io, storepath, link, populated_dataset, common_ora_init_opts)
 
 
-def test_initremote_errors(ria_sshserver, existing_dataset):
+def test_initremote_errors(ria_sshserver, existing_dataset,
+                           common_ora_init_opts):
     # retrieve all values from the ssh-server fixture
     ds = existing_dataset
     ria_baseurl = ria_sshserver[0]
@@ -121,7 +118,7 @@ def test_initremote_errors(ria_sshserver, existing_dataset):
     with pytest.raises(CommandError):
         ds.repo.init_remote(
             'ria-remote',
-            options=common_init_opts + [f'url={ria_baseurl}'],
+            options=common_ora_init_opts + [f'url={ria_baseurl}'],
         )
 
     # Doesn't actually create a remote if it fails
@@ -133,7 +130,7 @@ def test_initremote_errors(ria_sshserver, existing_dataset):
     with pytest.raises(CommandError):
         ds.repo.init_remote(
             'ria-remote',
-            options=common_init_opts + [
+            options=common_ora_init_opts + [
                 # strip the 'ria+' prefix
                 f'url={ria_baseurl[4:]}',
             ]
