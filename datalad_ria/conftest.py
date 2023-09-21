@@ -10,3 +10,8 @@ from .tests.fixtures import (
     ria_sshserver,
     ria_sshserver_setup,
 )
+
+from .tests.test_ssh_remote_io import (
+    ssh_remote_wdir,
+    ssh_remoteio,
+)
