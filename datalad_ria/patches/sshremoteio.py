@@ -1,6 +1,6 @@
-"""Enable `SSHRemoteIO` operation on Windows
+"""Correct flaws in `SSHRemoteIO` operation
 
-The original code has two problems.
+The original code has a number of problems.
 
 1. The ``cmd``-argument for the shell ssh-process, which is created by:
    ``self.shell = subprocess.Popen(cmd, ...)`` is not correct, if ``self.ssh``i
@@ -27,6 +27,13 @@ The original code has two problems.
    stdout-pipeline of the ssh shell-process, i.e. reading an EOF from the
    stdout-pipeline. If any of those two cases appears, an exception is raised.
 
+3. The output endmarker handling in ``SSHRemoteIO._run()`` could not reliably
+   handle commands that would yield output without a final newline (e.g.,
+   ``cat`` of a file without a trailing newline). This patch changes to
+   endmarker handling to guarantee that they appear on a dedicated line,
+   by prefixing the marker itself with a newline (which is withheld form the
+   actual output).
+
 In addition, this patch modifies two comments. It adds a missing description of
 the ``buffer_size``-parameter of ``SSHRemoteIO.__init__``to the doc-string, and
 fixes the description of the condition in the comment on the use of
@@ -36,7 +43,12 @@ fixes the description of the condition in the comment on the use of
 import logging
 import subprocess
 
-from datalad.distributed.ora_remote import ssh_manager
+from datalad.distributed.ora_remote import (
+    ssh_manager,
+    sh_quote,
+    RemoteCommandFailedError,
+    RIARemoteError,
+)
 # we need to get this from elsewhere, the orginal code does local imports
 from datalad.support.exceptions import CommandError
 # we need this for a conditional that is not part of the original code
@@ -108,7 +120,77 @@ def SSHRemoteIO__init__(self, host, buffer_size=DEFAULT_BUFFER_SIZE):
     self.buffer_size = buffer_size if buffer_size else DEFAULT_BUFFER_SIZE
 
 
+# The method 'SSHRemoteIO_append_end_markers' is a patched version of
+# 'datalad/distributed/ora-remote.py:SSHRemoteIO._append_end_markers'
+# from datalad@58b8e06317fe1a03290aed80526bff1e2d5b7797
+def SSHRemoteIO_append_end_markers(self, cmd):
+    """Append end markers to remote command"""
+
+    # THE PATCH: the addition of the leading newline char
+    return "{} && printf '\\n%s\\n' {} || printf '\\n%s\\n' {}\n".format(
+        cmd,
+        sh_quote(self.REMOTE_CMD_OK),
+        sh_quote(self.REMOTE_CMD_FAIL),
+    )
+
+
+# The method 'SSHRemoteIO_run' is a patched version of
+# 'datalad/distributed/ora-remote.py:SSHRemoteIO._run'
+# from datalad@58b8e06317fe1a03290aed80526bff1e2d5b7797
+def SSHRemoteIO_run(self, cmd, no_output=True, check=False):
+    # TODO: we might want to redirect stderr to stdout here (or have
+    #       additional end marker in stderr) otherwise we can't empty stderr
+    #       to be ready for next command. We also can't read stderr for
+    #       better error messages (RemoteError) without making sure there's
+    #       something to read in any case (it's blocking!).
+    #       However, if we are sure stderr can only ever happen if we would
+    #       raise RemoteError anyway, it might be okay.
+    call = self._append_end_markers(cmd)
+    self.shell.stdin.write(call.encode())
+    self.shell.stdin.flush()
+
+    # PATCH: helper to strip the endmarker newline
+    def _strip_endmarker_newline(lines):
+        if lines[-1] == '\n':
+            lines = lines[:-1]
+        else:
+            lines[-1] = lines[-1][:-1]
+        return lines
+
+    lines = []
+    while True:
+        line = self.shell.stdout.readline().decode()
+        if line == self.REMOTE_CMD_OK + '\n':
+            # PATCH remove leading newline that also belongs to the endmarker
+            lines = _strip_endmarker_newline(lines)
+            # end reading
+            break
+        elif line == self.REMOTE_CMD_FAIL + '\n':
+            # PATCH remove leading newline that also belongs to the endmarker
+            lines = _strip_endmarker_newline(lines)
+            if check:
+                raise RemoteCommandFailedError(
+                    "{cmd} failed: {msg}".format(cmd=cmd,
+                                                 msg="".join(lines[:-1]))
+                )
+            else:
+                break
+        # PATCH add line only here, to skip end markers alltogether
+        lines.append(line)
+    if no_output and len(lines) > 1:
+        raise RIARemoteError("{}: {}".format(call, "".join(lines)))
+    return "".join(lines)
+
+
 apply_patch(
     'datalad.distributed.ora_remote', 'SSHRemoteIO', '__init__',
     SSHRemoteIO__init__,
+)
+apply_patch(
+    'datalad.distributed.ora_remote', 'SSHRemoteIO', '_append_end_markers',
+    SSHRemoteIO_append_end_markers,
+)
+apply_patch(
+    'datalad.distributed.ora_remote', 'SSHRemoteIO', '_run',
+    SSHRemoteIO_run,
 )
