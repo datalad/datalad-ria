@@ -32,11 +32,23 @@ def ssh_remote_wdir(ssh_remoteio, ria_sshserver_setup):
         ssh_remoteio.ssh(f'echo rm -rf "{wdir}"')
 
 
-def test_SSHRemoteIO_read_file(ssh_remoteio):
+def test_SSHRemoteIO_readwrite_file(ssh_remote_wdir):
+    ssh_remoteio, targetdir = ssh_remote_wdir
     # basic smoke test, just login and use the abstraction to read a file
     etcpasswd = ssh_remoteio.read_file('/etc/passwd')
     # we can assume that the remote /etc/passwd file is not empty
     assert etcpasswd
+    # from scratch
+    content = 'nonewlines'
+    targetfilepath = targetdir / 'testfile'
+    ssh_remoteio.write_file(targetfilepath, content)
+    assert ssh_remoteio.exists(targetfilepath)
+    # XXX https://github.com/datalad/datalad-ria/issues/89
+    assert ssh_remoteio.read_file(targetfilepath) == f'{content}\n'
+    ssh_remoteio.ssh(f'printf "%s" "{content}" > {targetfilepath}')
+    # XXX this is https://github.com/datalad/datalad-ria/issues/86
+    # which hangs due to https://github.com/datalad/datalad-ria/issues/87
+    assert ssh_remoteio.read_file(targetfilepath) == content
 
 
 # this is not using `ssh_remote_wdir`, because we want to go manual
