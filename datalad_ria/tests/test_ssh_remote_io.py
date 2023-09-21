@@ -93,3 +93,35 @@ def test_SSHRemoteIO_symlink(ssh_remote_wdir):
     # verify that we can remove a symlink
     ssh_remoteio.remove(targetfpath)
     assert not ssh_remoteio.exists(targetfpath)
+
+
+def test_SSHRemoteIO_updownload(ssh_remote_wdir, tmp_path):
+    ssh_remoteio, targetdir = ssh_remote_wdir
+    probefpath = tmp_path / 'probe'
+    content = 'dummy'
+    probefpath.write_text(content)
+
+    def noop_callback(val):
+        pass
+
+    ssh_remoteio.put(
+        probefpath, targetdir / 'myupload', noop_callback)
+    assert ssh_remoteio.exists(targetdir / 'myupload')
+    ssh_remoteio.get(
+        targetdir / 'myupload', tmp_path / 'mydownload', noop_callback)
+    assert (tmp_path / 'mydownload').read_text() == content
+
+    # rename and redownload
+    renamed_targetfpath = targetdir / 'probe'
+    ssh_remoteio.rename(targetdir / 'myupload', renamed_targetfpath)
+    ssh_remoteio.get(
+        renamed_targetfpath, tmp_path / 'mydownload2', noop_callback)
+    assert (tmp_path / 'mydownload').read_text() \
+        == (tmp_path / 'mydownload2').read_text()
+
+    # redo upload, overwriting the renamed file
+    probefpath.write_text('allnew')
+    ssh_remoteio.put(
+        probefpath, renamed_targetfpath, noop_callback)
+    assert ssh_remoteio.exists(renamed_targetfpath)
+    assert ssh_remoteio.read_file(renamed_targetfpath) == 'allnew'
