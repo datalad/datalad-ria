@@ -18,6 +18,8 @@ from datalad_ria.tests.utils import (
     assert_ssh_access,
 )
 
+from datalad_next.tests.utils import create_tree
+
 
 @pytest.fixture(autouse=False, scope="session")
 def ria_sshserver_setup(tmp_path_factory):
@@ -78,6 +80,22 @@ def ria_sshserver(ria_sshserver_setup, datalad_cfg, monkeypatch):
         yield ria_baseurl, ria_sshserver_setup['LOCALPATH']
 
 
+@pytest.fixture(autouse=False, scope="function")
+def populated_dataset(existing_dataset):
+    """Creates a new dataset with saved payload"""
+    tree = {
+        'one.txt': 'content1',
+        'three.txt': 'content3',
+        'subdir': {
+            'two': 'content2',
+            'four': 'content4',
+        },
+    }
+    create_tree(existing_dataset.path, tree, archives_leading_dir=False)
+    existing_dataset.save(result_renderer='disabled')
+    yield existing_dataset
+
+    
 @pytest.fixture(autouse=False, scope="function")
 def common_ora_init_opts():
     """Return common initialization arguments for the ora special remote"""

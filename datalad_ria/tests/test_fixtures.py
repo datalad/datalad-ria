@@ -24,6 +24,17 @@ def test_riaserver_fixture(ria_sshserver):
     assert ria_sshserver[0].startswith('ria+ssh://')
 
 
+def test_populate_dataset_fixture(populated_dataset):
+    # populated_dataset is a Dataset object
+    assert populated_dataset.pathobj.exists()
+    assert (populated_dataset.pathobj / 'three.txt').exists()
+    with open(populated_dataset.pathobj / 'three.txt') as file:
+        payload = file.read()
+        assert payload == "content3"
+    assert (populated_dataset.pathobj / 'subdir').is_dir()
+
+    
 def test_common_ora_init_opts_fixture(common_ora_init_opts):
     assert "externaltype=ora" in common_ora_init_opts
     assert "autoenable=true" in common_ora_init_opts
+
