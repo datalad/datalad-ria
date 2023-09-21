@@ -5,6 +5,7 @@ pytest_plugins = [
 ]
 
 from .tests.fixtures import (
+    create_store_ssh,
     common_ora_init_opts,
     populated_dataset,
     ria_sshserver,

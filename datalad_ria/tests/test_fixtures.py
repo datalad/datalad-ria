@@ -38,3 +38,11 @@ def test_common_ora_init_opts_fixture(common_ora_init_opts):
     assert "externaltype=ora" in common_ora_init_opts
     assert "autoenable=true" in common_ora_init_opts
 
+
+def test_create_store_ssh(create_store_ssh):
+    # create_store_ssh yields a ``SSHRemoteIO`` instance matching the RIA server
+    # setup, and a basepath to the root of a newly created RIA store skeleton
+    store_url, remoteio, basepath = create_store_ssh
+    assert remoteio.exists(basepath)
+    assert remoteio.exists(basepath / 'error_logs')
+    assert remoteio.read_file(basepath / 'ria-layout-version') == '1\n'
