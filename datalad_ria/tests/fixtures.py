@@ -101,3 +101,15 @@ def common_ora_init_opts():
     common_init_opts = ["encryption=none", "type=external", "externaltype=ora",
                         "autoenable=true"]
     yield common_init_opts
+
+
+@pytest.fixture(autouse=False, scope="function")
+def create_store_local(tmp_path):
+    basepath = tmp_path / 'store'
+    error_logs = basepath / 'error_logs'
+    version_file = basepath / 'ria-layout-version'
+    basepath.mkdir()
+    error_logs.touch()
+    version_file.write_text('1')
+    return basepath
+
