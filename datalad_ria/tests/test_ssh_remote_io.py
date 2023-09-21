@@ -43,3 +43,17 @@ def test_SSHRemoteIO_handledir(ssh_remoteio, ria_sshserver_setup):
     # ssh_remoteio.remove(targetdir)
     ssh_remoteio.remove_dir(targetdir)
     assert not ssh_remoteio.exists(targetdir)
+
+
+def test_SSHRemoteIO_symlink(ssh_remoteio, ria_sshserver_setup):
+    sshpath = PurePosixPath(ria_sshserver_setup['SSH_PATH'])
+    targetdir = sshpath / 'testdir'
+    ssh_remoteio.mkdir(targetdir)
+    targetfpath = targetdir / 'testfile'
+    assert not ssh_remoteio.exists(targetfpath)
+    ssh_remoteio.symlink('/etc/passwd', targetfpath)
+    assert ssh_remoteio.exists(targetfpath)
+    assert ssh_remoteio.read_file('/etc/passwd') \
+        == ssh_remoteio.read_file(targetfpath)
+    ssh_remoteio.remove(targetfpath)
+    assert not ssh_remoteio.exists(targetfpath)
