@@ -38,3 +38,8 @@ def test_common_ora_init_opts_fixture(common_ora_init_opts):
     assert "externaltype=ora" in common_ora_init_opts
     assert "autoenable=true" in common_ora_init_opts
 
+
+def test_create_store_local(create_store_local):
+    assert create_store_local.exists()
+    assert (create_store_local / 'error_logs').exists()
+    assert (create_store_local / 'ria-layout-version').read_text() == '1'
