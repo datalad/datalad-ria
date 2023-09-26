@@ -35,7 +35,13 @@ def test_common_ora_init_opts_fixture(common_ora_init_opts):
     assert "autoenable=true" in common_ora_init_opts
 
 
-def test_create_store_local(create_store_local):
-    assert create_store_local.exists()
-    assert (create_store_local / 'error_logs').exists()
-    assert (create_store_local / 'ria-layout-version').read_text() == '1'
+def test_ria_store_localaccess(ria_store_localaccess, ria_server_localpath):
+    store_name, store_path = ria_store_localaccess
+    # created under DATALAD_TESTS_RIA_SERVER_LOCALPATH
+    assert store_path.parent == ria_server_localpath
+    # reported name matches directory name
+    assert store_name == store_path.name
+    # expected content
+    assert store_path.exists()
+    assert (store_path / 'error_logs').exists()
+    assert (store_path / 'ria-layout-version').read_text() == '1'
