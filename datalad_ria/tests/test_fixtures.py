@@ -1,9 +1,5 @@
 from datalad_ria.tests.utils import assert_ssh_access
 
-# we import this one, rather than putting it into conftest.py, because
-# it is considered internal, in contrast to `ria_sshserver`
-from datalad_ria.tests.fixtures import ria_sshserver_setup
-
 
 def test_riaserver_setup_fixture(ria_sshserver_setup):
     # we run the same test that the fixture already ran, to verify that
@@ -33,7 +29,7 @@ def test_populate_dataset_fixture(populated_dataset):
         assert payload == "content3"
     assert (populated_dataset.pathobj / 'subdir').is_dir()
 
-    
+
 def test_common_ora_init_opts_fixture(common_ora_init_opts):
     assert "externaltype=ora" in common_ora_init_opts
     assert "autoenable=true" in common_ora_init_opts
