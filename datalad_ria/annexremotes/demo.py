@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import time
 from pathlib import Path
 from typing import Any
 
@@ -14,10 +15,23 @@ class DemoRemote(UncurlRemote):
     def __init__(self, annex: Any):
         super().__init__(annex)
         self.store_path = Path('/home/cristian/tmp/demo-store')
+        self.tmp_path = self.store_path / 'transfer'
         self.store_path.mkdir(parents=True, exist_ok=True)
+        self.tmp_path.mkdir(parents=True, exist_ok=True)
+        self.logfile = Path(f'/tmp/ora-demo-{time.time()}.log').open('wt')
 
-    def key_path(self, key) -> Path:
+    def __del__(self):
+        self.logfile.close()
+
+    def message(self, msg, type='debug'):
+        self.logfile.write(msg + '\n')
+        self.logfile.flush()
+
+    def key_path(self, key: str) -> Path:
         return self.store_path / key
+
+    def tmp_key_path(self, key: str) -> Path:
+        return self.tmp_path / (key + str(time.time()) + '.transfering')
 
     def initremote(self):
         pass
@@ -32,7 +46,12 @@ class DemoRemote(UncurlRemote):
         return url.startswith('demo://')
 
     def transfer_store(self, key: str, local_file: str):
-        shutil.copy(local_file, self.key_path(key))
+        # We transfer via a temporary unique name in order
+        # prevent checkpresent from reporting while we are
+        # uploading the file.
+        transfer_path = self.tmp_key_path(key)
+        shutil.copy(local_file, transfer_path)
+        shutil.move(transfer_path, self.key_path(key))
 
     def transfer_retrieve(self, key: str, local_file: str):
         shutil.copy(self.key_path(key), local_file)
