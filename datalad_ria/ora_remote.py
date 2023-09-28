@@ -1,3 +1,5 @@
+import uuid
+
 from datalad_next.annexremotes import (
     RemoteError,
     super_main,
@@ -43,6 +45,9 @@ class Ora2Remote(UncurlRemote):
             # Adopt git-annex's style of messaging
             raise RemoteError('ria+<scheme>://... URL expected for url=')
 
+        # TODO run _get_ria_dsid() to confirm the validity of the ID
+        # setup
+
         # here we could do all kinds of sanity and version checks.
         # however, in some sense `initremote` is not very special in
         # this regard. Most (or all) of these checks would also run
@@ -51,6 +56,55 @@ class Ora2Remote(UncurlRemote):
         # yet completely initialized remote (and therefore possibly
         # not seeing a relevant remote-specific git-config). Therefore
         # we are not doing any checks here (for now).
+
+    def prepare(self):
+        # UUID to use for this dataset in the store
+        dsid = self._get_ria_dsid()
+
+        # check for a remote-specific uncurl config
+        # self.get_remote_gitcfg() would also consider a remote-type
+        # general default, which is undesirable here
+        tmpl_var = f'remote.{self.remotename}.uncurl-url'
+        url_tmpl = self.repo.config.get(tmpl_var, None)
+        if url_tmpl is None:
+            # pull the recorded ria URL from git-annex
+            ria_url = self.annex.getconfig('url')
+            assert ria_url.startswith('ria+')
+            # TODO check the layout settings of the actual store
+            # to match this template
+            base_url = ria_url[4:]
+            url_tmpl = (
+                # we fill in base url and dsid directly here (not via
+                # uncurl templating), because it is simpler
+                f'{base_url}/{dsid[:3]}/{dsid[3:]}/annex/objects/'
+                # RIA v? uses the "mixed" dirhash
+                '{annex_dirhash}{annex_key}/{annex_key}'
+            )
+        # we set the URL template in the config for the base class
+        # routines to find
+        self.repo.config.set(tmpl_var, url_tmpl, scope='override')
+        # the rest is UNCURL "business as usual"
+        super().prepare()
+
+    #
+    # helpers
+    #
+    def _get_ria_dsid(self):
+        # check if the remote has a particular dataset ID configured
+        # via git-annex
+        dsid = self.annex.getconfig('archive-id')
+        # if not, fall back on the datalad dataset ID
+        if not dsid:
+            dsid = self.repo.config.get('datalad.dataset.id')
+        # under all circumstances this must be a valid UUID
+        try:
+            uuid.UUID(dsid)
+        except ValueError as e:
+            raise RemoteError(
+                'No valid dataset UUID identifier found,'
+                'specify via archive-id='
+            ) from e
+        return dsid
 
 
 def main():
