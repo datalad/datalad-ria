@@ -86,6 +86,16 @@ class Ora2Remote(UncurlRemote):
         # the rest is UNCURL "business as usual"
         super().prepare()
 
+    def delete(self, key):
+        # delete the key
+        super().delete(key)
+        # TODO depending on the nature of RIA store, we also should remove
+        # the key directory, and possibly also the dirhash-type parents.
+        # so possibly we need to make up to three additional deletion
+        # requests via the handler. This can be rather slow, unless the
+        # handler is clever (or we can instruct the handler to trigger
+        # all deletions in one go
+
     #
     # helpers
     #
