@@ -51,3 +51,20 @@ def test_ora_localops(ria_store_localaccess, populated_dataset):
 
     # smoke test that it can run
     repo.call_annex(ir_cmd + [f'url=ria+{store_path.as_uri()}'])
+
+    cp_cmd = [
+        'copy',
+        '-t', f'test-{ora_external_type}',
+    ]
+
+    repo.call_annex(cp_cmd + ['one.txt'])
+    # the annex key properties (and dirhash) are determined by the
+    # file content and the MD5E backend default.
+    # If neither of those changes, they must not change
+    key_fpath = store_path / \
+        ds.id[:3] / ds.id[3:] / 'annex' / 'objects' / \
+        'X9' / '6J' / \
+        'MD5E-s8--7e55db001d319a94b0b713529a756623.txt' / \
+        'MD5E-s8--7e55db001d319a94b0b713529a756623.txt'
+    assert key_fpath.exists()
+    assert key_fpath.read_text() == 'content1'
