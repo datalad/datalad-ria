@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+import logging
 import random
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +9,9 @@ from datalad.runner.nonasyncrunner import run_command
 from datalad.runner.protocol import GeneratorMixIn
 from datalad.runner.coreprotocols import StdOutErrCapture
 from queue import Queue
+
+
+lgr = logging.getLogger('datalad.ria.sshshell')
 
 
 class SSSHShellProtocol(StdOutErrCapture, GeneratorMixIn):
@@ -26,7 +29,11 @@ class SSSHShellProtocol(StdOutErrCapture, GeneratorMixIn):
         self.send_result(('timeout', fd))
 
     def pipe_data_received(self, fd: int, data: bytes) -> None:
-        print(f'pipe_data_received({len(data)})', fd, data[:50], file=sys.stderr)
+        lgr.log(
+            5,
+            'SSHShellProtocol: pipe_data_received(%d): %s, %s',
+            len(data), fd, repr(data)
+        )
         self.send_result((fd, data))
 
 
@@ -48,10 +55,9 @@ class PatternFilter:
     def _find_pattern_start(self, data_chunk: bytes) -> tuple[int, int]:
         # Because the pattern might be only partially in the data chunk, we
         # have to check for all prefixes.
-        for length in range(min(len(data_chunk), len(self.pattern)) + 1, 0, -1):
+        for length in range(min(len(data_chunk), len(self.pattern)), 0, -1):
             # We only have to check pattern parts
             # that are not longer than the data chunk
-            print(length)
             active_pattern = self.pattern[0:length]
             if active_pattern in data_chunk:
                 return data_chunk.index(active_pattern), length
@@ -61,7 +67,6 @@ class PatternFilter:
         # Because we have seen the start of the pattern, we are looking for the
         # remaining patter at the beginning od this chunk.
         active_pattern = self.pattern[self.state:self.state + len(data_chunk)]
-        print(active_pattern)
         if data_chunk.startswith(active_pattern):
             return min(len(data_chunk), len(self.pattern) - self.state)
         return -1
@@ -120,37 +125,65 @@ class SSHShell:
             timeout=timeout)
         self._swallow_login_messages()
 
+    def _get_tag(self, prefix: bytes = b'datalad-result-'):
+        return prefix + str(random.randint(0, 1000000000)).encode()
+
     def _swallow_login_messages(self):
-        pattern = 'login-end-' + str(random.randint(0, 100000000))
-        self.stdin_queue.put(f'echo {pattern}\n'.encode())
-        for result in self.generator:
-            print(result)
-            if result[0] == 1 and result[1] == (pattern + '\n').encode():
-                break
+        pattern = self._get_tag(b'login-end-') + b'\n'
+        self.stdin_queue.put(b'echo ' + pattern)
+        pattern_filter = PatternFilter(pattern)
+        for (file_number, data) in self.generator:
+            if file_number == 1:
+                data, pattern_found, remainder = pattern_filter.filter(data)
+                if pattern_found is True:
+                    break
 
     def run_command(self,
                     command: str
                     ):
-        self.current_tag = 'datalad-result-' + str(random.randint(0, 1000000000))
-        self.current_end_btag = b'\n' + self.current_tag.encode() + b'\n'
-        self.current_status_btag = self.current_tag.encode() + b': '
-        extended_command = command + f'; x=$?; echo; echo "{self.current_tag}"; echo "{self.current_tag}: $x" >&2\n'
+        current_tag = self._get_tag()
+        current_status_tag = current_tag + b':'
+        extended_command = (
+                command
+                + f'; x=$?; echo -n "{current_tag.decode()}";'
+                + f'echo "{current_status_tag.decode()}$x" >&2\n'
+        )
         self.stdin_queue.put(extended_command.encode())
 
         # Fetch the responses
         seen_stdout = False
         seen_stderr = False
         exit_code = None
+        stdout_pfilter = PatternFilter(current_tag)
+        stderr_pfilter = PatternFilter(current_status_tag)
+        newline_filter = PatternFilter(b'\n')
+        exit_code_data = b''
+        stderr_tag_found = False
         for result in self.generator:
             stdout_data = result[1] if result[0] == 1 else b''
             stderr_data = result[1] if result[0] == 2 else b''
-            if self.current_status_btag[1:] in stderr_data:
-                exit_code = int(stderr_data[stderr_data.index(self.current_status_btag[1:]) + len(self.current_status_btag[1:]):])
-                stderr_data = stderr_data[:stderr_data.index(self.current_status_btag[1:])]
-                seen_stderr = True
-            if stdout_data.endswith(self.current_end_btag):
-                stdout_data = stdout_data[:stdout_data.index(self.current_end_btag)]
-                seen_stdout = True
+
+            if stderr_data:
+                if stderr_tag_found is False:
+                    stderr_data, stderr_tag_found, newline_data = stderr_pfilter.filter(stderr_data)
+                    stderr_data = newline_data
+
+                if stderr_tag_found is True:
+                    stderr_data, newline_found, _ = newline_filter.filter(stderr_data)
+                    # Assemble result code
+                    exit_code_data += stderr_data
+                    # Set stderr_data to b'' to prevent the exit code from
+                    # appearing in the stderr output.
+                    stderr_data = b''
+                    if newline_found:
+                        exit_code = int(exit_code_data)
+                        seen_stderr = True
+
+            if stdout_data:
+                stdout_data, stdout_tag_found, stdout_remainder = stdout_pfilter.filter(stdout_data)
+                if stdout_tag_found:
+                    seen_stdout = True
+
             if stdout_data or stderr_data or exit_code:
                 yield {
                     'stdout': stdout_data,
@@ -167,6 +200,7 @@ def main():
         identity='/home/cristian/.ssh/ria_test_rsa',
         timeout=3)
 
+    lgr.setLevel(5)
     for command in ('ls -l /dsfsdfsd', 'echo -n /xxxxxxxxxxxxx', 'cat /tmp/bbb', 'ls -lH /boot/vmlinuz'):
         print('--------------------:', command)
         for r in ssh_shell.run_command(command):
