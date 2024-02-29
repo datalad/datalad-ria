@@ -6,11 +6,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from datalad_next.annexremotes import super_main
+from datalad_next.annexremotes import super_main, SpecialRemote
 from datalad_next.annexremotes.uncurl import UncurlRemote
 
 
-class DemoRemote(UncurlRemote):
+class DemoRemote(SpecialRemote):
 
     def __init__(self, annex: Any):
         super().__init__(annex)
