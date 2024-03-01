@@ -4,6 +4,7 @@ import logging
 import os
 import time
 from pathlib import PurePosixPath
+from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
 
@@ -37,6 +38,7 @@ class DemoSshRemote(SpecialRemote):
         self.url = None
         self.dataset_id = None
         self.handler = None
+        self.initialization_lock = Lock()
         # logging and debugging
         self.logfile = open(f'/tmp/ssh-demo-{time.time()}.log', 'wt')
         self.pid = os.getpid()
@@ -55,29 +57,32 @@ class DemoSshRemote(SpecialRemote):
         except (ProtocolError, AttributeError):
             pass
 
-    def _initialize(self):
-        if self.handler is not None:
+    def _get_handler(self):
+        with self.initialization_lock:
+            if self.handler:
+                return True
+
+            self.url = urlparse(self.annex.getconfig('url'))
+            self.dataset_id = self.annex.getconfig('id')
+            handler_class = g_supported_schemes.get(self.url.scheme, None)
+            if handler_class is None:
+                self.message(f'unsupported scheme: {self.url.scheme!r}')
+                return False
+            self.handler = handler_class(
+                self,
+                PurePosixPath(self.url.path),
+                self.dataset_id,
+                [b'ssh', b'-i', b'/home/cristian/.ssh/gitlab-metadata-key', self.url.netloc.encode()],
+            )
             return True
-        self.url = urlparse(self.annex.getconfig('url'))
-        self.dataset_id = self.annex.getconfig('id')
-        handler_class = g_supported_schemes.get(self.url.scheme, None)
-        if handler_class is None:
-            self.message(f'unsupported scheme: {self.url.scheme!r}')
-            return False
-        self.handler = handler_class(
-            self.dataset_id,
-            [b'ssh', b'-i', b'/home/cristian/.ssh/gitlab-metadata-key', self.url.netloc.encode()],
-            PurePosixPath(self.url.path)
-        )
-        return True
 
     def initremote(self):
-        self.message(f'initremote called')
-        return self._initialize()
+        if not self._get_handler():
+            return False
+        return self.handler.initremote()
 
     def prepare(self):
-        self.message('prepare called')
-        if self._initialize() is False:
+        if not self._get_handler():
             return False
         return self.handler.prepare()
 

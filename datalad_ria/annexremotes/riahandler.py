@@ -5,9 +5,12 @@ from abc import (
     ABCMeta,
     abstractmethod,
 )
-from pathlib import PurePosixPath
+from pathlib import (
+    PurePath,
+    PurePosixPath,
+)
 
-from annexremote import Master
+from datalad_next.annexremotes import SpecialRemote
 
 
 lgr = logging.getLogger('datalad.ria.riahandler')
@@ -15,15 +18,17 @@ lgr = logging.getLogger('datalad.ria.riahandler')
 
 class RIAHandler(metaclass=ABCMeta):
     def __init__(self,
-                 annex: Master,
+                 special_remote: SpecialRemote,
+                 base_path: PurePath,
                  dataset_id: str,
                  ) -> None:
-        self.annex = annex
+        self.special_remote = special_remote
+        self.base_path = PurePosixPath(base_path)
         self.dataset_id = dataset_id
 
     def get_ria_path(self, key: str) -> PurePosixPath:
         # NOTE: this is not the final version
-        return PurePosixPath(self.dataset_id) / key
+        return self.base_path / self.dataset_id / key
 
     def initremote(self) -> bool:
         return True
