@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from contextlib import contextmanager
 from pathlib import (
     Path,
@@ -17,7 +18,7 @@ from typing import (
     Callable,
 )
 
-from datalad_next.annexremotes import SpecialRemote
+from datalad_next.annexremotes import SpecialRemote, RemoteError
 from datalad_next.runners.iter_subproc import CommandError
 from datalad_next.shell import (
     shell,
@@ -91,14 +92,17 @@ class SshThread(Thread):
                 self.ssh_command,
                 zero_command_rg_class=self.zero_command_rg_class,
         ) as ssh:
-            while True:
-                command = self.command_queue.get()
-                lgr.debug('SshThread got command: %s', repr(command))
-                if command is None:
-                    lgr.debug('SshThread exiting')
-                    ssh.close()
-                    return
-                self.result_queue.put(self._process(ssh, command))
+            try:
+                while True:
+                    command = self.command_queue.get()
+                    lgr.debug(f'SshThread<{hex(id(self))}>: got command: {command}')
+                    if command is None:
+                        lgr.debug(f'SshThread<{hex(id(self))}>: exiting (location 1)')
+                        ssh.close()
+                        return
+                    self.result_queue.put(self._process(ssh, command))
+            finally:
+                lgr.debug(f'SshThread<{hex(id(self))}>: exiting (location 2)')
 
     def _process(self,
                  ssh: ShellCommandExecutor,
@@ -110,7 +114,11 @@ class SshThread(Thread):
         have a convenience implementation, e.g. "download".
         """
         if isinstance(command, tuple):
-            return ssh(command[0], response_generator=command[1])
+            try:
+                return ssh(command[0], response_generator=command[1])
+            except BaseException as e:
+                lgr.debug(f'SshThread<{hex(id(self))}>: unexpected exception during execution of command: {command}: {e!r}')
+                raise
         else:
             try:
                 args = (ssh,) + command.args
@@ -121,8 +129,11 @@ class SshThread(Thread):
                     kwargs = {}
                 return command.operation(*args, **kwargs)
             except CommandError as e:
-                lgr.debug(f'SshThread: command failed: {command} (code: {e.code}) {e!r}')
+                lgr.debug(f'SshThread<{hex(id(self))}>: command failed: {command} (code: {e.code}) {e!r}')
                 return e
+            except BaseException as e:
+                lgr.debug(f'SshThread<{hex(id(self))}>: unexpected exception during execution of command: {command}: {e!r}')
+                raise
 
     def execute(self,
                 command: bytes | str,
@@ -155,9 +166,15 @@ class SshThread(Thread):
             if isinstance(result, CommandError):
                 raise result
 
-    def upload(self, local_path: Path, remote_path: PurePosixPath):
+    def upload(self,
+               local_path: Path,
+               remote_path: PurePosixPath,
+               progress_handler: Callable[[int, int], None] | None = None
+               ):
         with self.run_lock:
-            self.send(UploadOperation(args=(local_path, remote_path)))
+            self.send(
+                UploadOperation(
+                    args=(local_path, remote_path, progress_handler)))
             result = self.receive()
             if isinstance(result, CommandError):
                 raise result
@@ -175,17 +192,17 @@ def remote_tempfile(ssh_thread: SshThread,
                     ) -> PurePosixPath:
     """Create a temporary file on the remote and return its name"""
     try:
-        temp_file_name = ssh_thread.execute(b'mktemp').strip()
+        temp_file_name = ssh_thread.execute(b'mktemp').strip().decode()
     except CommandError as e:
         debug(
             f'@contextmanager: remote_tempfile: failed to create temporary file on the remote: ({e}) {e!r}'
         )
         raise e
     try:
-        yield PurePosixPath(temp_file_name.decode())
+        yield PurePosixPath(temp_file_name)
     finally:
         try:
-            ssh_thread.execute(b'rm -f ' + temp_file_name)
+            ssh_thread.execute(f'rm -f {temp_file_name}')
         except CommandError as e:
             debug(
                 f'@contextmanager: remote_tempfile: failed to remove temporary '
@@ -201,104 +218,118 @@ class SshRIAHandlerPosix(RIAHandler):
                  dataset_id: str,
                  command_list: list[bytes],
                  ) -> None:
+        lgr.debug(f'ssh_riahandler<{hex(id(self))}>: __init__ called')
         super().__init__(special_remote, base_path, dataset_id)
         self.command_list = command_list
+        self.ssh_thread = None
         self.debug = special_remote.annex.debug
         self.base_path = base_path
-        self.ssh_thread = SshThread(command_list)
-        self.ssh_thread.start()
+        self.remote_temp_dir = None
+        self.command_lock = Lock()
 
     def __del__(self):
         # Instruct the ssh-thread to quit and wait for its termination.
+        lgr.debug(f'ssh_riahandler<{hex(id(self))}>: __del__ called, requesting termination of ssh_thread')
         self.ssh_thread.command_queue.put(None)
+        lgr.debug(f'ssh_riahandler<{hex(id(self))}>: __del__ called, waiting for thread {self.ssh_thread} to terminate')
         self.ssh_thread.join()
+        lgr.debug(f'ssh_riahandler<{hex(id(self))}>: __del__ called, ssh_thread {self.ssh_thread} terminated')
 
-    def initremote(self) -> bool:
-        return True
 
-    def prepare(self) -> bool:
-        return True
+    def _get_remote_temp_dir(self):
+        pass
 
-    def transfer_store(self, key: str, local_file: str) -> bool:
-        # If we already have the key, we will not transfer anything
-        if self.checkpresent(key):
-            return True
+    def prepare(self) -> None:
+        with self.command_lock:
+            if self.ssh_thread is None:
+                lgr.debug(f'prepare<{hex(id(self))}>: starting ssh_thread for command {self.command_list}')
+                self.ssh_thread = SshThread(self.command_list)
+                self.ssh_thread.start()
+                lgr.debug(f'prepare<{hex(id(self))}>: started ssh_thread {hex(id(self.ssh_thread))}')
 
-        remote_path = self.get_ria_path(key)
+    def transfer_store(self, key: str, local_file: str) -> None:
+        def progress_handler(size: int, total_size: int):
+            self.annex.progress(size)
 
-        if True:
-            remote_temp_file = None
-            try:
-                self.debug(f'transfer_store: execute: mktemp')
-                remote_temp_file = self.ssh_thread.execute(b'mktemp').strip()
+        with self.command_lock:
+            # Only transfer, if we don't have the key yet
+            if not self._locked_checkpresent(key):
 
-                self.debug(f'transfer_store: remote path: {remote_path}')
-                self.debug(f'transfer_store: execute: mkdir -p {remote_path.parent}')
-                self.ssh_thread.execute(f'mkdir -p {remote_path.parent}')
-
-                self.debug(f'transfer_store: uploading to {remote_temp_file}')
-                self.ssh_thread.upload(Path(local_file), PurePosixPath(remote_temp_file.decode()))
-                self.debug(f'transfer_store: upload done')
-
-                self.debug(f'transfer_store: execute: mv -f {remote_temp_file} {remote_path}')
-                self.ssh_thread.execute(f'mv -f {remote_temp_file} {remote_path}')
-                self.debug(f'transfer_store: moving done')
-
-            except CommandError:
-                if remote_tempfile:
-                    try:
-                        self.debug(f'transfer_store: execute: rm -f {remote_temp_file}')
-                        self.ssh_thread.execute(b'rm -f ' + remote_temp_file)
-                    except CommandError:
-                        self.debug(f'transfer_store: could not remove temp file: {remote_temp_file}')
-                return False
-            return True
-
+                transfer_path = self.get_ria_path(key, '.transfer')
+                final_path = self.get_ria_path(key)
+                try:
+                    self.ssh_thread.execute(f'mkdir -p {transfer_path.parent}')
+                    self.ssh_thread.upload(Path(local_file), transfer_path, progress_handler)
+                    self.ssh_thread.execute(f'mv -f {transfer_path} {final_path}')
+                    transfer_path = None
+                except CommandError as e:
+                    if transfer_path:
+                        try:
+                            self.ssh_thread.execute(f'rm -f {transfer_path}')
+                        except CommandError:
+                            lgr.error(f'transfer_store: could not remove transfer file: {transfer_path}')
+                    raise RemoteError(f'transfer_store {local_file} to {key} failed') from e
+                except BaseException as e:
+                    lgr.error(f'transfer_store<{hex(id(self))}>: caught unexpected exception: {e!r}')
+                    raise
+        return
         with remote_tempfile(self.ssh_thread, self.debug) as remote_temp_file:
             # Ensure that the remote path exists.
-            self.debug(f'transfer_store: mkdir -p {remote_path.parent}')
+            lgr.debug(f'transfer_store: mkdir -p {remote_path.parent}')
             self.ssh_thread.execute(f'mkdir -p {remote_path.parent}')
 
             # Upload the local file to the temporary file.
-            self.debug(f'transfer_store: uploading to {remote_temp_file}')
+            lgr.debug(f'transfer_store: uploading to {remote_temp_file}')
             self.ssh_thread.upload(
                 Path(local_file),
                 PurePosixPath(remote_temp_file)
             )
-            self.debug(f'transfer_store: upload done')
+            lgr.debug(f'transfer_store: upload done')
 
             # Move the temporary file to its final destination.
             # TODO determine the reason for failure from the stderr output
             #  and try to mitigate the problem.
             try:
-                self.debug(f'transfer_store: moving from {remote_temp_file} to {remote_path}')
+                lgr.debug(f'transfer_store: moving from {remote_temp_file} to {remote_path}')
                 self.ssh_thread.execute(f'mv -f {remote_temp_file} {remote_path}')
-                self.debug(f'transfer_store: moving done')
+                lgr.debug(f'transfer_store: moving done')
             except CommandError as e:
-                self.debug(f'transfer_store: move failed: ({e.code}) {e!r}')
+                lgr.debug(f'transfer_store: move failed: ({e.code}) {e!r}')
                 return False
             return True
 
-    def transfer_retrieve(self, key: str, local_file: str) -> bool:
-        try:
-            self.ssh_thread.download(self.get_ria_path(key), Path(local_file))
-        except CommandError as e:
-            self.debug(f'transfer_retrieve: download {key} failed: {e!r}')
-            return False
-        return True
+    def transfer_retrieve(self, key: str, local_file: str) -> None:
+        with self.command_lock:
+            if self._locked_checkpresent(key):
+                source = self.get_ria_path(key)
+                destination = Path(local_file)
+                try:
+                    self.ssh_thread.download(source, destination)
+                except CommandError as e:
+                    lgr.error(f'transfer_retrieve: download failed: key: {key} ({source} to {destination}): {e!r}')
+                    raise RemoteError(f'transfer_retrieve: downloading {key} ({source} to {destination}) failed') from e
+                return
+            raise RemoteError(f'key {key} not present')
 
-    def remove(self, key: str) -> bool:
-        try:
-            self.ssh_thread.execute(f'rm -f {self.get_ria_path(key)}')
-            return True
-        except CommandError as e:
-            self.debug(f'remove: rm {self.get_ria_path(key)} failed: {e!r}')
-            return False
+    def remove(self, key: str) -> None:
+        with self.command_lock:
+            if self._locked_checkpresent(key):
+                key_path = self.get_ria_path(key)
+                try:
+                    self.ssh_thread.execute(
+                        f'mv -f {key_path} {key_path}.deleted'
+                    )
+                except CommandError as e:
+                    lgr.error(f'remove: {key} ({key_path}) failed: {e!r}')
+                    raise RemoteError(f'remove: could not remove key {key}') from e
 
     def checkpresent(self, key: str) -> bool:
+        with self.command_lock:
+            return self._locked_checkpresent(key)
+
+    def _locked_checkpresent(self, key: str) -> bool:
         try:
             self.ssh_thread.execute(f'test -f {self.get_ria_path(key)}')
         except CommandError as e:
-            self.debug(f'checkpresent: test -f {self.get_ria_path(key)} failed: {e!r}')
             return False
         return True

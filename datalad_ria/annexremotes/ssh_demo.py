@@ -11,11 +11,13 @@ from urllib.parse import urlparse
 from annexremote import ProtocolError
 
 from datalad_next.annexremotes import (
+    RemoteError,
     SpecialRemote,
     super_main
 )
 
 from .ssh_riahandler import SshRIAHandlerPosix
+from .file_riahandler import FileRIAHandlerPosix
 
 
 lgr = logging.getLogger('datalad.ria.ssh')
@@ -23,6 +25,7 @@ lgr = logging.getLogger('datalad.ria.ssh')
 
 g_supported_schemes = {
     'ria2+ssh': SshRIAHandlerPosix,
+    'ria2+file': FileRIAHandlerPosix,
     'ria2+http': None,
     'ria2+https': None,
 }
@@ -60,42 +63,46 @@ class DemoSshRemote(SpecialRemote):
     def _get_handler(self):
         with self.initialization_lock:
             if self.handler:
-                return True
+                return
 
             self.url = urlparse(self.annex.getconfig('url'))
             self.dataset_id = self.annex.getconfig('id')
             handler_class = g_supported_schemes.get(self.url.scheme, None)
             if handler_class is None:
                 self.message(f'unsupported scheme: {self.url.scheme!r}')
-                return False
-            self.handler = handler_class(
-                self,
-                PurePosixPath(self.url.path),
-                self.dataset_id,
-                [b'ssh', b'-i', b'/home/cristian/.ssh/gitlab-metadata-key', self.url.netloc.encode()],
-            )
-            return True
+                raise RemoteError(f'unsupported scheme: {self.url.scheme!r}')
+            if handler_class is SshRIAHandlerPosix:
+                self.handler = handler_class(
+                    self,
+                    PurePosixPath(self.url.path),
+                    self.dataset_id,
+                    [b'ssh', b'-i', b'/home/cristian/.ssh/gitlab-metadata-key', self.url.netloc.encode()],
+                )
+            elif handler_class is FileRIAHandlerPosix:
+                self.handler = handler_class(
+                    self,
+                    PurePosixPath(self.url.path),
+                    self.dataset_id,
+                )
 
     def initremote(self):
-        if not self._get_handler():
-            return False
-        return self.handler.initremote()
+        self._get_handler()
+        self.handler.initremote()
 
     def prepare(self):
-        if not self._get_handler():
-            return False
-        return self.handler.prepare()
+        self._get_handler()
+        self.handler.prepare()
 
-    def transfer_store(self, key: str, local_file: str) -> bool:
-        return self.handler.transfer_store(key, local_file)
+    def transfer_store(self, key: str, local_file: str):
+        self.handler.transfer_store(key, local_file)
 
     def transfer_retrieve(self, key: str, local_file: str):
-        return self.handler.transfer_retrieve(key, local_file)
+        self.handler.transfer_retrieve(key, local_file)
 
     def remove(self, key):
-        return self.handler.remove(key)
+        self.handler.remove(key)
 
-    def checkpresent(self, key: str):
+    def checkpresent(self, key: str) -> bool:
         return self.handler.checkpresent(key)
 
 
