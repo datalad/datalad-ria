@@ -40,6 +40,9 @@ class RIAHandler(metaclass=ABCMeta):
     def prepare(self):
         pass
 
+    def progress_handler(self, size: int, total_size: int):
+        self.annex.progress(size)
+
     @abstractmethod
     def transfer_store(self, key: str, local_file: str):
         raise NotImplementedError
