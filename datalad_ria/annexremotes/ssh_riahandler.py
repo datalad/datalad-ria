@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 import traceback
 from contextlib import contextmanager
 from functools import partial
@@ -408,30 +407,6 @@ class SshRIAHandlerPosix(RIAHandler):
                     )
                     raise RemoteError('transfer_store: mv -f failed') from e
 
-        # with self.command_lock:
-        #     # Only transfer, if we don't have the key yet
-        #     if self._locked_checkpresent(key):
-        #         return
-        #
-        #     transfer_path = self.get_ria_path(key, '.transfer')
-        #     final_path = self.get_ria_path(key)
-        #     try:
-        #         self.ssh_thread.execute(f'mkdir -p {transfer_path.parent}')
-        #         self.ssh_thread.upload(Path(local_file), transfer_path, self.progress_handler)
-        #         self.ssh_thread.execute(f'mv -f {transfer_path} {final_path}')
-        #         transfer_path = None
-        #     except CommandError as e:
-        #         if transfer_path:
-        #             try:
-        #                 self.ssh_thread.execute(f'rm -f {transfer_path}')
-        #             except CommandError:
-        #                 lgr.error(f'transfer_store: could not remove transfer file: {transfer_path}')
-        #         raise RemoteError(f'transfer_store {local_file} to {key} failed') from e
-        #     except BaseException as e:
-        #         lgr.error(f'transfer_store: caught unexpected exception: {e!r}')
-        #         raise
-        # return
-
     def transfer_retrieve(self, key: str, local_file: str) -> None:
         key = _sanitize_key(key)
         with self.command_lock:
@@ -491,6 +466,6 @@ class SshRIAHandlerPosix(RIAHandler):
     def _locked_checkpresent(self, key: str) -> bool:
         try:
             self.ssh_thread.execute(f'test -f {self.get_ria_path(key)}')
-        except CommandError as e:
+        except CommandError:
             return False
         return True
