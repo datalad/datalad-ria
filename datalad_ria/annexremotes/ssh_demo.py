@@ -1,19 +1,16 @@
 from __future__ import annotations
 
 import logging
-import os
-import time
 from pathlib import PurePosixPath
 from threading import Lock
 from typing import Any
 from urllib.parse import urlparse
 
 from annexremote import ProtocolError
-
-from datalad_next.annexremotes import (
+from datalad.customremotes.main import main as super_main
+from datalad.customremotes import (
     RemoteError,
-    SpecialRemote,
-    super_main
+    SpecialRemote as _SpecialRemote,
 )
 
 from .ssh_riahandler import SshRIAHandlerPosix
@@ -31,7 +28,7 @@ g_supported_schemes = {
 }
 
 
-class DemoSshRemote(SpecialRemote):
+class DemoSshRemote(_SpecialRemote):
     def __init__(self, annex: Any):
         super().__init__(annex)
         self.configs = {
@@ -42,19 +39,12 @@ class DemoSshRemote(SpecialRemote):
         self.dataset_id = None
         self.handler = None
         self.initialization_lock = Lock()
-        # logging and debugging
-        self.logfile = open(f'/tmp/ssh-demo-{time.time()}.log', 'wt')
-        self.pid = os.getpid()
-        self.message(f'__init__(): url: {self.url!r}, dataset_id: {self.dataset_id!r}')
-        self.message('__init__() done')
 
     def __del__(self):
         pass
 
     def message(self, msg, type='debug'):
-        output_msg = f'DemoSshRemote[{self.pid}]: ' + msg
-        self.logfile.write(output_msg + '\n')
-        self.logfile.flush()
+        output_msg = f'DemoSshRemote: ' + msg
         try:
             self.annex.info('INFO: ' + output_msg)
         except (ProtocolError, AttributeError):

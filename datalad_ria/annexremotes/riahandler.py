@@ -10,7 +10,7 @@ from pathlib import (
     PurePosixPath,
 )
 
-from datalad_next.annexremotes import SpecialRemote
+from datalad.customremotes import SpecialRemote
 
 
 lgr = logging.getLogger('datalad.ria.riahandler')
@@ -31,8 +31,13 @@ class RIAHandler(metaclass=ABCMeta):
                      key: str,
                      extension: str = ''
                      ) -> PurePosixPath:
-        # NOTE: this is not the final version
-        return self.base_path / self.dataset_id / (key + extension)
+        return (
+            self.base_path
+            / self.dataset_id[:3] / self.dataset_id[3:]
+            / 'annex' / 'objects'
+            / self.special_remote.annex.dirhash(key)
+            / key / (key + extension)
+        )
 
     def initremote(self):
         pass

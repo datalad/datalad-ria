@@ -10,6 +10,3 @@ def test_download_basics():
 
     def progress_callback(size, total_size):
         print(size, total_size)
-
-    x = DownloadProgressRG(Dummy(), progress_callback)
-    print(x)
