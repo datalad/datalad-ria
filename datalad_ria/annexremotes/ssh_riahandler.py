@@ -6,10 +6,10 @@ from contextlib import contextmanager
 from functools import partial
 from pathlib import (
     Path,
-    PurePath,
     PurePosixPath,
 )
 from queue import Queue
+from stat import S_IWUSR
 from threading import (
     Thread,
     Lock,
@@ -46,6 +46,8 @@ from .riahandler import RIAHandler
 
 
 lgr = logging.getLogger('datalad.ria.riahandler.ssh')
+
+layout_version = '1'
 
 
 class OperationBase:
@@ -99,8 +101,7 @@ class DownloadProgressRG(DownloadResponseGeneratorPosix):
         #  progress-callback invocations. The code is replicated to keep the
         #  performance of `DownloadResponseGenerator.send` high
         #  by avoiding the overhead of checking for a non-None
-        #  `self.progress_callback` attribute in
-        #  `DownloadResponseGenerator.send`.
+        #  `self.progress_callback` attribute after every read operation.
         chunk = b''
         while True:
             if self.state == 2:
@@ -266,14 +267,7 @@ class SshThread(Thread):
                 command = command.encode()
             self.send((command, response_generator))
             result = self.receive()
-
-            # If the result is an exception, raise it in this thread as a
-            # RemoteError. Even if our caller doesn't catch it, it still
-            # indicates an error to the protocol handler.
-            if isinstance(result, CommandError):
-                message = f'command failed: {command}, exception: {result}'
-                lgr.error(message)
-                raise RemoteError(message) from result
+            self._check_for_command_error(command, result)
 
             # Check the return value of the remote operation. Raise a
             # `RemoteError` if the return code is non-zero.
@@ -299,8 +293,7 @@ class SshThread(Thread):
                 DownloadOperation(
                     args=(remote_path, local_path, progress_handler)))
             result = self.receive()
-            if isinstance(result, CommandError):
-                raise result
+            self._check_for_command_error('<download>', result)
 
     def upload(self,
                local_path: Path,
@@ -313,14 +306,23 @@ class SshThread(Thread):
                 UploadOperation(
                     args=(local_path, remote_path, progress_handler)))
             result = self.receive()
-            if isinstance(result, CommandError):
-                raise result
+            self._check_for_command_error('<upload>', result)
 
     def send(self, command: Any):
         self.command_queue.put(command)
 
     def receive(self) -> Any:
         return self.result_queue.get()
+
+    @staticmethod
+    def _check_for_command_error(command, result):
+        # If the result is an exception, raise it in this thread as a
+        # RemoteError. Even if our caller doesn't catch it, it still
+        # indicates an error to the protocol handler.
+        if isinstance(result, CommandError):
+            message = f'command failed: {command}, exception: {result}'
+            lgr.error(message)
+            raise RemoteError(message) from result
 
 
 @contextmanager
@@ -352,7 +354,7 @@ def remote_tempfile(ssh_thread: SshThread) -> PurePosixPath:
 class SshRIAHandlerPosix(RIAHandler):
     def __init__(self,
                  special_remote: SpecialRemote,
-                 base_path: PurePath,
+                 base_path: PurePosixPath,
                  dataset_id: str,
                  command_list: list[bytes],
                  ) -> None:
@@ -361,26 +363,40 @@ class SshRIAHandlerPosix(RIAHandler):
         self.ssh_thread = None
         self.debug = special_remote.annex.debug
         self.base_path = base_path
-        self.remote_temp_dir = None
         self.command_lock = Lock()
+        self.layout_version = None
+        self._initialize()
 
     def __del__(self):
         # Instruct the ssh-thread to quit and wait for its termination.
         self.ssh_thread.command_queue.put(None)
         self.ssh_thread.join()
 
-    def _get_remote_temp_dir(self):
-        pass
+    def _initialize(self):
+        if self.ssh_thread is None:
+            lgr.debug(
+                '_initialize: starting ssh_thread for command %s',
+                str(self.command_list),
+            )
+            self.ssh_thread = SshThread(self.command_list)
+            self.ssh_thread.start()
 
-    def prepare(self) -> None:
-        with self.command_lock:
-            if self.ssh_thread is None:
-                lgr.debug(
-                    'prepare: starting ssh_thread for command %s',
-                    str(self.command_list),
-                )
-                self.ssh_thread = SshThread(self.command_list)
-                self.ssh_thread.start()
+        # Ensure that the base path exists
+        self.ssh_thread.execute(f'mkdir -p {self.get_ria_repo_path()}')
+        # Get the layout version
+        self.layout_version = self._get_layout_version()
+
+    def _get_layout_version(self) -> str:
+        try:
+            return self.ssh_thread.execute(
+                f'cat {self.base_path / "ria-layout-version"}'
+            ).strip().decode()
+        except CommandError:
+            self.ssh_thread.execute(
+                f'echo {layout_version} > '
+                f'{self.base_path / "ria-layout-version"}'
+            )
+            return layout_version
 
     def transfer_store(self, key: str, local_file: str) -> None:
         key = _sanitize_key(key)
@@ -399,7 +415,7 @@ class SshRIAHandlerPosix(RIAHandler):
                 )
 
                 # Ensure that the remote path exists.
-                final_path = self.get_ria_path(key)
+                final_path = self.get_ria_key_path(key)
                 self.ssh_thread.execute(f'mkdir -p {final_path.parent}')
 
                 # Move the temporary file to its final destination.
@@ -413,7 +429,7 @@ class SshRIAHandlerPosix(RIAHandler):
         key = _sanitize_key(key)
         with self.command_lock:
             if self._locked_checkpresent(key):
-                source = self.get_ria_path(key)
+                source = self.get_ria_key_path(key)
                 destination = Path(local_file)
                 self.ssh_thread.download(
                     source,
@@ -426,12 +442,31 @@ class SshRIAHandlerPosix(RIAHandler):
                 return
             raise RemoteError(f'key {key} not present')
 
+    @contextmanager
+    def _ensure_writable(self, path: PurePosixPath):
+        mode = int(
+            self.ssh_thread.execute(f'stat --format %f {path}').strip(),
+            base=16
+        )
+        modification_required = not mode & S_IWUSR
+        if modification_required:
+            self.ssh_thread.execute(f'chmod u+w {path}')
+        try:
+            yield
+        finally:
+            if modification_required:
+                self.ssh_thread.execute(f'chmod u-w {path}')
+
     def remove(self, key: str) -> None:
         key = _sanitize_key(key)
         with self.command_lock:
             if self._locked_checkpresent(key):
-                key_path = self.get_ria_path(key)
-                self.ssh_thread.execute(f'rm -rf {key_path.parent}')
+                self._locked_remove(key)
+
+    def _locked_remove(self, key: str) -> None:
+        key_path = self.get_ria_key_path(key)
+        with self._ensure_writable(key_path.parent):
+            self.ssh_thread.execute(f'rm -rf {key_path.parent}')
 
     def checkpresent(self, key: str) -> bool:
         key = _sanitize_key(key)
@@ -440,7 +475,7 @@ class SshRIAHandlerPosix(RIAHandler):
 
     def _locked_checkpresent(self, key: str) -> bool:
         try:
-            self.ssh_thread.execute(f'test -f {self.get_ria_path(key)}')
+            self.ssh_thread.execute(f'test -f {self.get_ria_key_path(key)}')
             return True
         except CommandError:
             return False

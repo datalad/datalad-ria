@@ -27,13 +27,18 @@ class RIAHandler(metaclass=ABCMeta):
         self.dataset_id = dataset_id
         self.annex = special_remote.annex
 
-    def get_ria_path(self,
-                     key: str,
-                     extension: str = ''
-                     ) -> PurePosixPath:
+    def get_ria_repo_path(self) -> PurePosixPath:
         return (
             self.base_path
             / self.dataset_id[:3] / self.dataset_id[3:]
+        )
+
+    def get_ria_key_path(self,
+                         key: str,
+                         extension: str = ''
+                         ) -> PurePosixPath:
+        return (
+            self.get_ria_repo_path()
             / 'annex' / 'objects'
             / self.special_remote.annex.dirhash(key)
             / key / (key + extension)
