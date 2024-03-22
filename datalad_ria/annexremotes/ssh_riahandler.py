@@ -9,7 +9,6 @@ from pathlib import (
     PurePosixPath,
 )
 from queue import Queue
-from stat import S_IWUSR
 from threading import (
     Thread,
     Lock,
@@ -206,10 +205,6 @@ class SshThread(Thread):
                         return
                     self.result_queue.put(self._process(ssh, command))
             finally:
-                lgr.debug(
-                    'SshThread: exiting due to exception:\n%s',
-                    traceback.format_exc(),
-                )
                 ssh.close()
 
     def _process(self,
@@ -325,32 +320,6 @@ class SshThread(Thread):
             raise RemoteError(message) from result
 
 
-@contextmanager
-def remote_tempfile(ssh_thread: SshThread) -> PurePosixPath:
-    """Create a temporary file on the remote and return its name"""
-    try:
-        temp_file_name = ssh_thread.execute(b'mktemp').strip().decode()
-    except CommandError as e:
-        lgr.debug(
-            '@contextmanager: remote_tempfile: failed to create temporary '
-            'file on remote due to exception: %s',
-            ''.join(traceback.format_exception(e))
-        )
-        raise e
-    try:
-        yield PurePosixPath(temp_file_name)
-    finally:
-        try:
-            ssh_thread.execute(f'rm -f {temp_file_name}')
-        except CommandError as e:
-            lgr.debug(
-                f'@contextmanager: remote_tempfile: failed to remove'
-                f'temporary file %s on remote due to exception: %s',
-                ''.join(traceback.format_exception(e)),
-            )
-            raise e
-
-
 class SshRIAHandlerPosix(RIAHandler):
     def __init__(self,
                  special_remote: SpecialRemote,
@@ -406,7 +375,7 @@ class SshRIAHandlerPosix(RIAHandler):
             if self._locked_checkpresent(key):
                 return
 
-            with remote_tempfile(self.ssh_thread) as remote_temp_file:
+            with self._remote_tempfile() as remote_temp_file:
                 # Upload the local file to the temporary file.
                 self.ssh_thread.upload(
                     Path(local_file),
@@ -418,12 +387,12 @@ class SshRIAHandlerPosix(RIAHandler):
                 final_path = self.get_ria_key_path(key)
                 self.ssh_thread.execute(f'mkdir -p {final_path.parent}')
 
-                # Move the temporary file to its final destination.
-                # TODO catch exception, determine the reason for failure
-                #  from the stderr output and try to mitigate the problem.
-                self.ssh_thread.execute(
-                    f'mv -f {remote_temp_file} {final_path}'
-                )
+                # Ensure that the remote path is writable.
+                with self._ensure_writable(final_path.parent):
+                    # Move the temporary file to its final destination.
+                    self.ssh_thread.execute(
+                        f'mv -f {remote_temp_file} {final_path}'
+                    )
 
     def transfer_retrieve(self, key: str, local_file: str) -> None:
         key = _sanitize_key(key)
@@ -444,11 +413,10 @@ class SshRIAHandlerPosix(RIAHandler):
 
     @contextmanager
     def _ensure_writable(self, path: PurePosixPath):
-        mode = int(
-            self.ssh_thread.execute(f'stat --format %f {path}').strip(),
-            base=16
-        )
-        modification_required = not mode & S_IWUSR
+        mode = self.ssh_thread.execute(f'ls -ldn {path}').decode().split()[0]
+        if mode[0] not in ('-', 'd'):
+            raise RemoteError(f'_ensure writable called on file type {mode[0]}')
+        modification_required = mode[2] != 'w'
         if modification_required:
             self.ssh_thread.execute(f'chmod u+w {path}')
         try:
@@ -456,6 +424,32 @@ class SshRIAHandlerPosix(RIAHandler):
         finally:
             if modification_required:
                 self.ssh_thread.execute(f'chmod u-w {path}')
+
+    @contextmanager
+    def _remote_tempfile(self) -> PurePosixPath:
+        """Create a temporary file on the remote and return its name"""
+        try:
+            temp_file_name = self.ssh_thread.execute(b'mktemp').strip().decode()
+        except CommandError as e:
+            lgr.debug(
+                '@contextmanager: SshRIAHandlerPosix._remote_tempfile: '
+                'failed to create temporary file on remote due to exception: %s',
+                ''.join(traceback.format_exception(e))
+            )
+            raise RemoteError('could not create remote temp file') from e
+        try:
+            yield PurePosixPath(temp_file_name)
+        finally:
+            try:
+                self.ssh_thread.execute(f'rm -f {temp_file_name}')
+            except CommandError as e:
+                lgr.debug(
+                    '@contextmanager: SshRIAHandlerPosix._remote_tempfile: '
+                    'failed to remove temporary file %s on remote due to '
+                    'exception: %s',
+                    ''.join(traceback.format_exception(e)),
+                )
+                raise RemoteError('could not remove remote temp file') from e
 
     def remove(self, key: str) -> None:
         key = _sanitize_key(key)
