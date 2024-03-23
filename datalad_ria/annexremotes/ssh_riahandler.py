@@ -159,8 +159,9 @@ class DownloadProgressRG(DownloadResponseGeneratorPosix):
 # `shell.posix.download`.
 # Why so complicated? Because the operation `shell.posix.download` is optimized
 # for speed. Therefore, it does not support an optional `progress_callback`.
-# To keep the `shell.posix.download`-interface simple, it also does not
-# support to pass keyword-arguments to the response generator that it creates.
+# To keep the `shell.posix.download`-interface simple, it does neither support
+# a progress callback, nor does it support to pass keyword-arguments to the
+# response generator that it creates.
 # To support progress callbacks nevertheless, we create a new response
 # generator class, which supports progress callbacks, i.e. `DownloadProgressRG`
 # and parameterize its instances with the appropriate callback.
