@@ -1,28 +1,24 @@
-import logging
+import uuid
+
 from datalad_next.annexremotes import (
     RemoteError,
-    SpecialRemote,
-    super_main
+    super_main,
+)
+from datalad_next.annexremotes.uncurl import (
+    UncurlRemote,
 )
 
-lgr = logging.getLogger('datalad.customremotes.ora_remote')
 
-
-class RemoteCommandFailedError(Exception):
-    pass
-
-
-class RIARemoteError(RemoteError):
-    pass
-
-
-class OraRemote(SpecialRemote):
+class Ora2Remote(UncurlRemote):
     """
-    git-annex special remote 'ORA' for storing and obtaining files in and from
-    RIA stores.
+    git-annex special remote for storing and obtaining files in and from RIA
+    stores. It is a reimplementation of an earlier ORA remote (until 0.19.x a
+    part of the DataLad core library).
 
-    It is a reimplementation of an earlier ORA remote (until 0.19.x a part of
-    the DataLad core library).
+    ORA stands for "(git-annex) optional remote access". A key purpose
+    for this remote is to provide its functionality without requiring a
+    git-annex installation on the remote side, while using data structures
+    that remain compatible for direct use with git-annex.
 
 
     Configuration
@@ -36,68 +32,91 @@ class OraRemote(SpecialRemote):
       legacy ``ORA`` special remote implementation. This mode is
       only provided for backward-compatibility.
     """
-    def __init__(self, annex):
-        super().__init__(annex)
-        # the following members will be initialized on prepare()
-        # as they require access to the underlying repository
-        self._repo = None
-        # name of the special remote
-        self._remotename = None
-        # name of the corresponding Git remote
-        self._gitremotename = None
-        self.archive_id = None
-        self._legacy_special_remote = None
-        self.remote_dataset_tree_version = None
-        self.remote_object_tree_version = None
-
     def initremote(self):
-        if not self.archive_id:
-            # The config manager can handle bare repos since datalad#6332
-            self.archive_id = self._repo.config.get('datalad.dataset.id')
-        pass
+        # we cannot simply run UncurlRemote.prepare(), because it needs
+        # `.remotename` and this is not yet available until the remote is
+        # fully initialized
+        #self.prepare()
+        ria_url = self.annex.getconfig('url')
+        if not ria_url:
+            # Adopt git-annex's style of messaging
+            raise RemoteError('Specify a RIA store URL with url=')
+        if not ria_url.startswith('ria+'):
+            # Adopt git-annex's style of messaging
+            raise RemoteError('ria+<scheme>://... URL expected for url=')
+
+        # TODO run _get_ria_dsid() to confirm the validity of the ID
+        # setup
+
+        # here we could do all kinds of sanity and version checks.
+        # however, in some sense `initremote` is not very special in
+        # this regard. Most (or all) of these checks would also run
+        # in prepare() on every startup. Performing the checks here
+        # would mean that we need to be able to do them with a not
+        # yet completely initialized remote (and therefore possibly
+        # not seeing a relevant remote-specific git-config). Therefore
+        # we are not doing any checks here (for now).
 
     def prepare(self):
-        # determine if we are in legacy mode, and if so, fall back to legacy ORA
-        if self.get_remote_gitcfg(
-                'ora', 'legacy-mode', default='no').lower() == 'yes':
-            # ATTENTION DEBUGGERS!
-            # If we get here, we will bypass all the ora implementation!
-            # Check __getattribute__() -- pretty much no other code in this
-            # file will run! __getattribute__ will relay all top-level
-            # operations to an instance of the legacy implementation
-            from datalad.distributed.ora_remote import ORARemote as LegacyORARemote
-            lsr = LegacyORARemote(self.annex)
-            lsr.prepare()
-            # we can skip everything else, it won't be triggered anymore
-            self._legacy_special_remote = lsr
-        pass
+        # UUID to use for this dataset in the store
+        dsid = self._get_ria_dsid()
 
-    def transfer_store(self, key, filename):
-        pass
+        # check for a remote-specific uncurl config
+        # self.get_remote_gitcfg() would also consider a remote-type
+        # general default, which is undesirable here
+        tmpl_var = f'remote.{self.remotename}.uncurl-url'
+        url_tmpl = self.repo.config.get(tmpl_var, None)
+        if url_tmpl is None:
+            # pull the recorded ria URL from git-annex
+            ria_url = self.annex.getconfig('url')
+            assert ria_url.startswith('ria+')
+            # TODO check the layout settings of the actual store
+            # to match this template
+            base_url = ria_url[4:]
+            url_tmpl = (
+                # we fill in base url and dsid directly here (not via
+                # uncurl templating), because it is simpler
+                f'{base_url}/{dsid[:3]}/{dsid[3:]}/annex/objects/'
+                # RIA v? uses the "mixed" dirhash
+                '{annex_dirhash}{annex_key}/{annex_key}'
+            )
+        # we set the URL template in the config for the base class
+        # routines to find
+        self.repo.config.set(tmpl_var, url_tmpl, scope='override')
+        # the rest is UNCURL "business as usual"
+        super().prepare()
 
-    def transfer_retrieve(self, key, filename):
-        pass
+    #
+    # helpers
+    #
+    def _get_ria_dsid(self):
+        # check if the remote has a particular dataset ID configured
+        # via git-annex
+        dsid = self.annex.getconfig('archive-id')
+        # if not, fall back on the datalad dataset ID
+        if not dsid:
+            dsid = self.repo.config.get('datalad.dataset.id')
+        # under all circumstances this must be a valid UUID
+        try:
+            uuid.UUID(dsid)
+        except ValueError as e:
+            raise RemoteError(
+                'No valid dataset UUID identifier found,'
+                'specify via archive-id='
+            ) from e
+        return dsid
 
-    def checkpresent(self, key):
-        pass
 
-    def remove(self, key):
-        pass
-
-    def getcost(self):
-        pass
-
-    def whereis(self, key):
-        pass
-
-    def checkurl(self, url):
-        pass
-
-    def claimurl(self, url):
-        pass
-
-    def getavailability(self):
-        pass
-
-    def getinfo(self):
-        pass
+def main():
+    """CLI entry point installed as ``git-annex-remote-ora2``"""
+    super_main(
+        cls=Ora2Remote,
+        # for now we go with a fixed (and different from -core) name.
+        # ultimately, we could switch the name based on sys.argv[0]
+        # and even have multiple entrypoints that behave differently
+        # by setting particular configuration, all conditional on the
+        # name
+        remote_name='ora2',
+        description=\
+        "transport file content to and from datasets hosted in RIA stores",
+    )
