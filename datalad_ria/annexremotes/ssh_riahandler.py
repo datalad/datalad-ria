@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import random
 import traceback
 from contextlib import contextmanager
 from functools import partial
@@ -47,6 +48,8 @@ from .riahandler import RIAHandler
 lgr = logging.getLogger('datalad.ria.riahandler.ssh')
 
 layout_version = '1'
+
+random.seed()
 
 
 class OperationBase:
@@ -376,24 +379,29 @@ class SshRIAHandlerPosix(RIAHandler):
             if self._locked_checkpresent(key):
                 return
 
-            with self._remote_tempfile() as remote_temp_file:
-                # Upload the local file to the temporary file.
-                self.ssh_thread.upload(
-                    Path(local_file),
-                    remote_temp_file,
-                    self.progress_handler
+            # Ensure that the remote path exists.
+            final_path = self.get_ria_key_path(key)
+            self.ssh_thread.execute(f'mkdir -p {final_path.parent}')
+
+            # Create a temporary file name
+            remote_temp_file = self.get_ria_key_path(
+                key,
+                extension=f'transfer-{random.randint(100000000, 999999999)}'
+            )
+
+            # Upload the local file to the temporary file.
+            self.ssh_thread.upload(
+                Path(local_file),
+                remote_temp_file,
+                self.progress_handler
+            )
+
+            # Ensure that the remote path is writable.
+            with self._ensure_writable(final_path.parent):
+                # Move the temporary file to its final destination.
+                self.ssh_thread.execute(
+                    f'mv -f {remote_temp_file} {final_path}'
                 )
-
-                # Ensure that the remote path exists.
-                final_path = self.get_ria_key_path(key)
-                self.ssh_thread.execute(f'mkdir -p {final_path.parent}')
-
-                # Ensure that the remote path is writable.
-                with self._ensure_writable(final_path.parent):
-                    # Move the temporary file to its final destination.
-                    self.ssh_thread.execute(
-                        f'mv -f {remote_temp_file} {final_path}'
-                    )
 
     def transfer_retrieve(self, key: str, local_file: str) -> None:
         key = _sanitize_key(key)
