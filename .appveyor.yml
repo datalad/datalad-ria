@@ -62,8 +62,6 @@ environment:
     - job_name: test-linux
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
       INSTALL_SYSPKGS: python3-venv
-      # system git-annex is way too old, use better one
-      INSTALL_GITANNEX: git-annex -m snapshot
       CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
       PY: 3.8
       DATALAD_TESTS_RIA_SERVER_SSH_HOST: datalad-test-ria
@@ -72,13 +70,12 @@ environment:
       DATALAD_TESTS_RIA_SERVER_SSH_SECKEY: /home/appveyor/.ssh/datalad_tests_id_rsa
       DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
       DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
+      UV_CACHE_DIR: /home/appveyor/.cache/uv
 
     # same as 'test-linux', but TMPDIR is on a crippled filesystem, causing
     # most, if not all test datasets to be created on that filesystem
     - job_name: test-linux-crippled
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
-      # system git-annex is way too old, use better one
-      INSTALL_GITANNEX: git-annex -m snapshot
       CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
       PY: 3.8
       DATALAD_TESTS_RIA_SERVER_SSH_HOST: datalad-test-ria
@@ -87,12 +84,13 @@ environment:
       DATALAD_TESTS_RIA_SERVER_SSH_SECKEY: /home/appveyor/.ssh/datalad_tests_id_rsa
       DATALAD_TESTS_RIA_SERVER_SSH_PATH: /usr/local/apache2/htdocs
       DATALAD_TESTS_RIA_SERVER_LOCALPATH: /home/appveyor/DLTMP/riaroot
+      UV_CACHE_DIR: /home/appveyor/.cache/uv
 
     - job_name: test-win
       APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      UV_CACHE_DIR: C:\Users\appveyor\AppData\Local\uv\cache
       # Python version specification is non-standard on windows
       PY: 39-x64
-      INSTALL_GITANNEX: git-annex -m datalad/packages
       DATALAD_TESTS_RIA_SERVER_SSH_HOST: datalad-test-ria
       DATALAD_TESTS_RIA_SERVER_SSH_PORT: 2222
       DATALAD_TESTS_RIA_SERVER_SSH_LOGIN: sshuser
@@ -102,8 +100,8 @@ environment:
 
     - job_name: test-mac
       APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
+      UV_CACHE_DIR: /Users/appveyor/.cache/uv
       PY: 3.9
-      INSTALL_GITANNEX: git-annex
       DATALAD_LOCATIONS_SOCKETS: /Users/appveyor/DLTMP/sockets
       CODECOV_BINARY: https://uploader.codecov.io/latest/macos/codecov
       DATALAD_TESTS_RIA_SERVER_SSH_HOST: localhost
@@ -148,8 +146,7 @@ for:
         - job_name: test-mac
 
     cache:
-      # pip cache
-      - /home/appveyor/.cache/pip -> .appveyor.yml
+      - "${UV_CACHE_DIR} -> .appveyor.yml"
 
     init:
       # needs APPVEYOR_SSH_KEY defined in project settings (or environment)
@@ -159,6 +156,9 @@ for:
       - mkdir ~/DLTMP && export TMPDIR=~/DLTMP
       # establish a root directory for RIA tests
       - "mkdir ${DATALAD_TESTS_RIA_SERVER_LOCALPATH}"
+      # deploy `uv`
+      - curl -LsSf https://astral.sh/uv/install.sh | sh
+      - source $HOME/.local/bin/env
 
     install:
       # verify that a PY variable is declared that identifies the desired Python version
@@ -167,15 +167,6 @@ for:
       # Use env setup (using the appveyor provided environments/installation) for the
       # particular Python version requested.
       - ". ${HOME}/venv${PY}/bin/activate; ln -s \"$VIRTUAL_ENV\" \"${HOME}/VENV\""
-      # deploy the datalad installer, override version via DATALAD_INSTALLER_VERSION
-      - python -m pip install datalad-installer${DATALAD_INSTALLER_VERSION:-}
-      # install git-annex, INSTALL_SYSPKGS can also be used deploy git-annex, if desired
-      #- "[ -n \"${INSTALL_GITANNEX}\" ] && datalad-installer --sudo ok ${INSTALL_GITANNEX}"
-      # in case of a snapshot installation, use the following approach to adjust
-      # the PATH as necessary
-      - "[ -n \"${INSTALL_GITANNEX}\" ] && datalad-installer -E ${HOME}/dlinstaller_env.sh --sudo ok ${INSTALL_GITANNEX} || true"
-      # add location of datalad installer results to PATH
-      - "[ -f ${HOME}/dlinstaller_env.sh ] && . ${HOME}/dlinstaller_env.sh || true"
       - tools/ci/install-syspkgs $INSTALL_SYSPKGS
 
     before_test:
@@ -227,8 +218,7 @@ for:
       only:
         - job_name: test-win
     cache:
-      # pip cache
-      - C:\Users\appveyor\AppData\Local\pip\Cache -> .appveyor.yml
+      - "%UV_CACHE_DIR% -> .appveyor.yml"
     # init cannot use any components from the repo, because it runs prior to
     # cloning it
     init:
@@ -248,19 +238,12 @@ for:
       - cmd: "set TEMP=C:\\DLTMP"
       # establish a root directory for RIA tests
       - cmd: md C:\DLTMP\riaroot
+      # install `uv`
+      - cmd: powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
 
     install:
       - cmd: copy tools\ci\appveyor_env_setup.bat C:\\datalad_debug.bat
-      - cmd: "set PATH=C:\\Python%PY%;C:\\Python%PY%\\Scripts;%PATH%"
-      # deploy the datalad installer, override version via DATALAD_INSTALLER_VERSION
-      - cmd:
-          IF DEFINED DATALAD_INSTALLER_VERSION (
-          python -m pip install "datalad-installer%DATALAD_INSTALLER_VERSION%"
-          ) ELSE (
-          python -m pip install datalad-installer
-          )
-      # install git-annex
-      - cmd: IF DEFINED INSTALL_GITANNEX datalad-installer --sudo ok %INSTALL_GITANNEX%
+      - cmd: "set PATH=C:\\Python%PY%;C:\\Python%PY%\\Scripts;C:\\Users\\appveyor\\.local\\bin;%PATH%"
 
     before_test:
       - tools\ci\setup-sshd
@@ -285,7 +268,10 @@ for:
 #
 # ALL TEST RUNS
 #
+
 build_script:
+  # deploy git-annex from PyPi
+  - uv tool install git-annex
   - python -m pip install -r requirements-devel.txt
   - python -m pip install .
 
