@@ -123,6 +123,8 @@ def SSHRemoteIO__init__(self, host, buffer_size=DEFAULT_BUFFER_SIZE):
     # make sure default is used if 0 or None was passed, too.
     self.buffer_size = buffer_size if buffer_size else DEFAULT_BUFFER_SIZE
 
+    # lazy property to store the remote unix name
+    self._remote_uname = None
 
 # The method 'SSHRemoteIO_append_end_markers' is a patched version of
 # 'datalad/distributed/ora-remote.py:SSHRemoteIO._append_end_markers'

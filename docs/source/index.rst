@@ -23,9 +23,8 @@ DataLad-ria Guides
 High-level API commands
 -----------------------
 
-.. currentmodule:: datalad.api
-.. autosummary::
-   :toctree: generated
+.. toctree::
+   :maxdepth: 2
 
    create_sibling_ria2
 
@@ -49,7 +48,6 @@ Patches that are automatically applied to DataLad when loading the
    :maxdepth: 2
 
    patches.rst
-
 
 Indices and tables
 ==================
