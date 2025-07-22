@@ -99,7 +99,7 @@ environment:
       DATALAD_TESTS_RIA_SERVER_LOCALPATH: C:\DLTMP\riaroot
 
     - job_name: test-mac
-      APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
+      APPVEYOR_BUILD_WORKER_IMAGE: macos-sonoma
       UV_CACHE_DIR: /Users/appveyor/.cache/uv
       PY: 3.9
       DATALAD_LOCATIONS_SOCKETS: /Users/appveyor/DLTMP/sockets
