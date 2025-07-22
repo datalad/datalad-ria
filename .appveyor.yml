@@ -3,7 +3,7 @@
 # to create a "native" platform experience, using as few cross-platform
 # helper tools as possible.
 #
-# On Linux/Mac a venv is used for testing. The effective venv
+# On Linux/Mac a venv is used for testing. The effective virtual env
 # is available under ~/VENV.
 #
 # All workers support remote login. Login details are shown at the top of each
@@ -41,7 +41,7 @@
 #     will run until the file is removed (or 60 min have passed)
 #
 #   - in a terminal execute, for example, `C:\datalad_debug.bat 39` to set up the
-#     environment to debug in a Python 3.8 session (should generally match the
+#     environment to debug in a Python 3.9 session (should generally match the
 #     respective CI run configuration).
 
 
@@ -61,6 +61,7 @@ environment:
   matrix:
     - job_name: test-linux
       APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      INSTALL_SYSPKGS: python3-venv
       # system git-annex is way too old, use better one
       INSTALL_GITANNEX: git-annex -m snapshot
       CODECOV_BINARY: https://uploader.codecov.io/latest/linux/codecov
@@ -101,7 +102,7 @@ environment:
 
     - job_name: test-mac
       APPVEYOR_BUILD_WORKER_IMAGE: macos-monterey
-      PY: 3.8
+      PY: 3.9
       INSTALL_GITANNEX: git-annex
       DATALAD_LOCATIONS_SOCKETS: /Users/appveyor/DLTMP/sockets
       CODECOV_BINARY: https://uploader.codecov.io/latest/macos/codecov
