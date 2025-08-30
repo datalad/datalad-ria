@@ -74,6 +74,7 @@ def ria_sshserver(ria_sshserver_setup, datalad_cfg, monkeypatch):
     ria_baseurl = build_ria_url(
         protocol='ssh',
         host=ria_sshserver_setup['HOST'],
+        port=ria_sshserver_setup['SSH_PORT'],
         user=ria_sshserver_setup['SSH_LOGIN'],
         path=ria_sshserver_setup['SSH_PATH'],
     )
