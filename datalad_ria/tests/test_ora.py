@@ -68,3 +68,14 @@ def test_ora_localops(ria_store_localaccess, populated_dataset):
         'MD5E-s8--7e55db001d319a94b0b713529a756623.txt'
     assert key_fpath.exists()
     assert key_fpath.read_text() == 'content1'
+
+    rm_cmd = [
+        'drop',
+        '-f', f'test-{ora_external_type}',
+    ]
+
+    repo.call_annex(rm_cmd + ['one.txt'])
+    assert not key_fpath.exists()
+    # TODO the parent directory stays (for now)
+    # https://github.com/datalad/datalad-next/issues/454
+    assert key_fpath.parent.exists()
