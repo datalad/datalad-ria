@@ -1,6 +1,8 @@
 from pathlib import PurePosixPath
 import pytest
 
+from datalad.support.exceptions import CommandError
+
 from datalad.distributed.ora_remote import (
     RemoteCommandFailedError,
     SSHRemoteIO,
@@ -52,6 +54,17 @@ def test_SSHRemoteIO_readwrite_file(ssh_remote_wdir):
     # XXX this is https://github.com/datalad/datalad-ria/issues/86
     # which hangs due to https://github.com/datalad/datalad-ria/issues/87
     assert ssh_remoteio.read_file(targetfilepath) == content
+
+
+def test_SSHRemoteIO_get_7z(ssh_remoteio):
+    # smoke test
+    have_7z = ssh_remoteio.get_7z()
+    if have_7z:
+        # we must be able to find it too
+        assert '7z' in ssh_remoteio.ssh('which 7z')[0]
+    else:
+        with pytest.raises(CommandError):
+            ssh_remoteio.ssh('which 7z')
 
 
 # this is not using `ssh_remote_wdir`, because we want to go manual
